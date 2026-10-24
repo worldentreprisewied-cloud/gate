@@ -328,7 +328,7 @@ body{
     </div>
   </div>
 
-  <div class="warnline">Failure will result in a penalty.</div>
+  <div class="warnline" id="warnline">Failure will result in a penalty.</div>
   <div class="foot" id="foot"></div>
 </div>
 
@@ -475,6 +475,7 @@ function render(s){
   });
 
   document.getElementById("penalty").style.display = yes(s.penalty_pending) ? "" : "none";
+  document.getElementById("warnline").style.display = (s.event === "rest") ? "none" : "";
   setText("foot", "LAST SYNC " + (s.updated || "-"));
   renderTimer();
 
