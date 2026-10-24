@@ -401,6 +401,7 @@ function localDateStr(d){
 }
 
 function renderTimer(){
+  if(cur && cur.event === "rest"){ var rbox = document.getElementById("timerbox"); rbox.classList.remove("late"); setText("ttime","REST DAY"); setText("trem","NO PENALTY - STREAK HELD"); return; }
   var now = new Date();
   var end = new Date(now); end.setHours(23,59,0,0);
   var box = document.getElementById("timerbox");
@@ -461,6 +462,7 @@ function render(s){
     var el = document.getElementById(p[0]);
     var qs = document.getElementById(p[1]);
     el.classList.remove("done","reported");
+    if(s.event === "rest"){ qs.textContent = "[REST DAY]"; return; }
     if(yes(p[2])){
       el.classList.add("done");
       qs.textContent = "[COMPLETE] " + p[4];
