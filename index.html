@@ -401,7 +401,7 @@ function localDateStr(d){
 }
 
 function renderTimer(){
-  if(cur && cur.event === "rest"){ var rbox = document.getElementById("timerbox"); rbox.classList.remove("late"); setText("ttime","REST DAY"); setText("trem","NO PENALTY - STREAK HELD"); return; }
+  if(cur && cur.event === "rest"){ var rbox = document.getElementById("timerbox"); rbox.classList.remove("late"); setText("ttime","REST DAY"); setText("trem", (parseInt(cur.streak||"0",10) > 0) ? "NO PENALTY - STREAK HELD" : "NO PENALTY"); return; }
   var now = new Date();
   var end = new Date(now); end.setHours(23,59,0,0);
   var box = document.getElementById("timerbox");
