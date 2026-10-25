@@ -151,12 +151,15 @@ body{
 .qbox i{display:block;width:100%;height:100%;border-radius:50%;background:rgba(8,14,30,.95)}
 .qrow.done .qbox i{background:var(--grn);box-shadow:0 0 14px rgba(61,240,176,.9)}
 .qrow.reported .qbox i{background:repeating-linear-gradient(45deg,rgba(95,212,255,.9) 0 3px,rgba(8,14,30,.9) 3px 6px)}
+.qt{min-width:0;flex:1}
 .qt .qn{font-family:"Orbitron",monospace;font-size:12px;font-weight:700;letter-spacing:.3em;color:var(--cy-hi);text-shadow:0 0 8px rgba(95,212,255,.5)}
-.qt .qd{font-size:15px;font-weight:600;color:var(--ink);margin-top:5px;line-height:1.5}
+.qt .qd{font-size:15px;font-weight:600;color:var(--ink);margin-top:5px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word}
 .qt .qs{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.16em;margin-top:8px;color:var(--dim);
   border:1px solid rgba(111,216,255,.14);border-radius:999px;padding:3px 10px;background:rgba(16,30,64,.5)}
-.qrow.done .qn,.qrow.done .qd{color:var(--dim);text-decoration:line-through}
-.qrow.done .qs{color:var(--grn);text-decoration:none;border-color:rgba(61,240,176,.3)}
+.qrow.done .qn{color:var(--grn)}
+.qrow.done .qd{color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.qrow.done.expanded .qd{display:block;-webkit-line-clamp:unset}
+.qrow.done .qs{color:var(--grn);border-color:rgba(61,240,176,.3)}
 .qrow.reported .qs{color:var(--cy)}
 .questnote{font-size:11px;font-weight:600;color:var(--dim);text-align:center;letter-spacing:.14em;line-height:1.8;margin-top:14px}
 
@@ -488,7 +491,7 @@ function render(s){
     if(s.event === "rest"){ qs.textContent = "[REST DAY]"; return; }
     if(yes(p[2])){
       el.classList.add("done");
-      qs.textContent = "[COMPLETE] " + p[4];
+      qs.textContent = "[COMPLETE] " + p[4] + " - TAP FOR DETAILS";
     } else if(p[3]){
       el.classList.add("reported");
       qs.textContent = "[REPORTED - AWAITING SYSTEM]";
@@ -541,7 +544,7 @@ function loadState(){
   document.getElementById(p[0]).addEventListener("click", function(){
     if(!cur.date) return;
     var doneKey = p[1] + "_done";
-    if(yes(cur[doneKey])) return;
+    if(yes(cur[doneKey])){ this.classList.toggle("expanded"); return; }
     var r = getReported(cur.date);
     r[p[1]] = !r[p[1]];
     setReported(r);
