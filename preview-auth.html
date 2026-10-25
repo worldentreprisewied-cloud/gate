@@ -781,6 +781,7 @@ function mergedState(){
 var baseRender = render;
 render = function(s){
   if(s && (!auth.ready)){ auth.lastPublic = s; }
+  if(s){ cur = s; }
   baseRender(mergedState());
   var b = document.getElementById("authbtn");
   if(auth.ready){ b.textContent = "SYNCED"; b.classList.add("signed"); b.classList.remove("autherr"); }
