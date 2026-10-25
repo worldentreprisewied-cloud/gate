@@ -47,10 +47,10 @@ body{
 .hero .shade{position:absolute;inset:0;
   background:linear-gradient(180deg, rgba(4,6,14,.55) 0%, rgba(4,6,14,.05) 34%, rgba(4,6,14,.08) 55%, rgba(4,6,14,.94) 96%)}
 .hero .hud{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:16px 16px 14px}
-.hero .hrow{display:flex;align-items:center;justify-content:space-between}
+.hero .hrow{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;row-gap:8px}
 .logo{font-family:"Orbitron",monospace;font-size:22px;font-weight:900;letter-spacing:.42em;color:#fff;
   text-shadow:0 0 14px rgba(111,216,255,.9),0 0 44px rgba(111,216,255,.45)}
-.logo small{display:block;font-family:"Rajdhani",sans-serif;font-size:10px;font-weight:600;letter-spacing:.5em;color:var(--cy);margin-top:2px;text-shadow:0 0 10px rgba(111,216,255,.6)}
+.logo small{display:block;font-family:"Rajdhani",sans-serif;font-size:9px;font-weight:600;letter-spacing:.3em;white-space:nowrap;color:var(--cy);margin-top:2px;text-shadow:0 0 10px rgba(111,216,255,.6)}
 .tbtns{display:flex;gap:8px}
 .tbtn{border:1px solid rgba(111,216,255,.35);background:rgba(8,14,32,.55);backdrop-filter:blur(6px);
   color:var(--cy);font-family:"Rajdhani",sans-serif;font-weight:700;font-size:12px;letter-spacing:.22em;text-indent:.22em;
@@ -238,6 +238,9 @@ body{
   .xpfill::after,.ov-burst,.overlay .big,.hero img{animation:none}
   .rise,.rise2,.rise3{animation:none}
 }
+#memov .memitem{font-family:"Orbitron",monospace;font-size:24px;color:var(--cy);margin:16px 0;letter-spacing:.08em;text-shadow:0 0 12px rgba(111,216,255,.6);word-break:break-word}
+#memov input{display:none;background:rgba(6,14,26,.92);border:1px solid var(--cy);color:#fff;padding:12px;font-size:18px;text-align:center;width:82%;max-width:330px;border-radius:6px;font-family:"Rajdhani",sans-serif;outline:none}
+#memov .membtn{cursor:pointer;margin-top:16px}
 </style>
 </head>
 <body>
@@ -382,6 +385,13 @@ body{
   <div class="big" id="ovTitle">LEVEL UP</div>
   <div class="note" id="ovNote"></div>
   <div class="tap">TAP TO CONTINUE</div>
+</div>
+<div class="overlay" id="memov">
+  <div class="big" id="memTitle">MEMORY</div>
+  <div class="note" id="memNote"></div>
+  <div class="memitem" id="memItem" style="display:none"></div>
+  <input id="memInput" type="text" autocomplete="off" placeholder="type the item exactly">
+  <div class="tap membtn" id="memBtn">CLOSE</div>
 </div>
 <script>
 var STATE_URL = "https://docs.google.com/spreadsheets/d/1xA052trsXF-n2ToX54dU9rOEpY9tl10JHF9xV1kyBUI/gviz/tq?tqx=out:json&sheet=state";
@@ -689,6 +699,8 @@ function api(url, opts){
 }
 
 function findOrCreateSheet(){
+  var ts = (location.search.match(/[?&]testsheet=([\w-]+)/)||[])[1];
+  if(ts) return Promise.resolve(ts);
   var q = encodeURIComponent("name='"+STATE_SHEET_NAME+"' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
   return api("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id,name)").then(function(d){
     if(d.files && d.files.length) return d.files[0].id;
@@ -715,7 +727,8 @@ function writePrivate(id, s){
 }
 
 var PROGRESS_KEYS = ["level","rank","title","xp","xp_needed","str","mem","int","streak","best_streak",
-                     "body_done","mind_done","thesis_done","date","last_thesis_step"];
+                     "body_done","mind_done","thesis_done","date","last_thesis_step",
+                     "mem_item","mem_studied","mem_result"];
 
 function setupPrivate(){
   return findOrCreateSheet().then(function(id){
@@ -783,6 +796,19 @@ render = function(s){
   if(s && (!auth.ready)){ auth.lastPublic = s; }
   if(s){ cur = s; }
   baseRender(mergedState());
+  if(auth.ready && auth.priv){
+    var qsm = document.getElementById("qs-mind");
+    var mm = mergedState();
+    if(!yes(mm.mind_done)){
+      qsm.textContent = memTestTime() ? "[RECALL TEST - TAP TO ANSWER]" : (yes(auth.priv.mem_studied) ? "[STUDIED - RECALL AT 21:30]" : "[TAP TO STUDY TODAY'S ITEM]");
+    }
+    if(cur && cur.date && auth.priv.date !== cur.date && !auth._dayBusy){
+      auth._dayBusy = true;
+      var p = ensureDay();
+      if(p && p.then) p.then(function(){ auth._dayBusy = false; }, function(){ auth._dayBusy = false; });
+      else auth._dayBusy = false;
+    }
+  }
   var b = document.getElementById("authbtn");
   if(auth.ready){ b.textContent = "SYNCED"; b.classList.add("signed"); b.classList.remove("autherr"); }
   else if(auth.pending){ b.textContent = "..."; }
@@ -797,6 +823,7 @@ render = function(s){
     var doneKey = p[1] + "_done";
     var m = mergedState();
     if(yes(m[doneKey])) return; // already complete: first listener toggled expansion
+    if(p[1] === "mind"){ e.stopPropagation(); openMindFlow(); return; } // memory study/recall flow
     e.stopPropagation(); // we handle completion; skip the legacy reported-marker toggle
     if(auth.priv.date !== cur.date){
       auth.priv.date = cur.date;
@@ -817,6 +844,99 @@ render = function(s){
     writePrivate(auth.sheetId, auth.priv).catch(function(){ auth.err = true; render(cur); });
   }, true);
 });
+
+
+/* in-app memory study/recall: item shown on study tap before 21:30, hidden after, exact recall tested at 21:30 */
+var MEM_ITEMS = ["4729","wolf lantern river","8315","candle bridge stone","6092","ember harbor violet","The quieter you become, the more you can hear","2847","marble compass tide","Discipline is remembering what you want","5518","copper willow gate","9374","island furnace glass","Slow is smooth, smooth is fast","1163","silver anchor field","7042","velvet thunder orchard","Not all storms come to disrupt","3958","crimson harbor owl","6619"];
+function pickMemItem(){ return MEM_ITEMS[Math.floor(Math.random()*MEM_ITEMS.length)]; }
+function memTestTime(){
+  if(/[?&]memtest=now/.test(location.search)) return true;
+  var n = new Date(); return n.getHours()*60 + n.getMinutes() >= 21*60+30;
+}
+function ensureDay(){
+  if(!auth.ready || !auth.priv || !cur || !cur.date) return;
+  var changed = false;
+  if(auth.priv.date !== cur.date){
+    auth.priv.date = cur.date;
+    auth.priv.body_done = "no"; auth.priv.mind_done = "no"; auth.priv.thesis_done = "no";
+    auth.priv.mem_item = pickMemItem();
+    auth.priv.mem_studied = "no"; auth.priv.mem_result = "";
+    changed = true;
+  } else if(!auth.priv.mem_item){
+    auth.priv.mem_item = pickMemItem();
+    if(auth.priv.mem_studied == null) auth.priv.mem_studied = "no";
+    if(auth.priv.mem_result == null) auth.priv.mem_result = "";
+    changed = true;
+  }
+  if(changed) return writePrivate(auth.sheetId, auth.priv).then(function(){ render(cur); }).catch(function(){ auth.err = true; render(cur); });
+}
+function openMindFlow(){
+  if(!auth.ready || !auth.priv) return;
+  var ov = document.getElementById("memov");
+  var inp = document.getElementById("memInput");
+  var btn = document.getElementById("memBtn");
+  var itemEl = document.getElementById("memItem");
+  inp.style.display = "none"; inp.value = ""; itemEl.style.display = "none";
+  var m = mergedState();
+  if(yes(m.mind_done)){
+    setText("memTitle","MIND COMPLETE");
+    setText("memNote","Today's memory quest is done. Exact recall accepted.");
+    btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
+  } else if(!memTestTime()){
+    if(!yes(auth.priv.mem_studied)){
+      setText("memTitle","STUDY - TODAY'S ITEM");
+      setText("memNote","Memorize this. It disappears until the 21:30 recall test.");
+      itemEl.textContent = auth.priv.mem_item || "(no item yet)";
+      itemEl.style.display = "block";
+      btn.textContent = "MARK STUDIED - HIDE IT";
+      btn.onclick = function(){
+        auth.priv.mem_studied = "yes";
+        writePrivate(auth.sheetId, auth.priv).catch(function(){ auth.err = true; });
+        ov.classList.remove("show"); render(cur);
+      };
+    } else {
+      setText("memTitle","STUDIED");
+      setText("memNote","The item is hidden now. Recall test at 21:30.");
+      btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
+    }
+  } else {
+    setText("memTitle","RECALL TEST - 21:30");
+    setText("memNote", yes(auth.priv.mem_studied) ? "Type the item exactly, from memory." : "You did not study today's item. Type it exactly if you know it.");
+    inp.style.display = "block";
+    btn.textContent = "SUBMIT";
+    btn.onclick = submitMemory;
+    setTimeout(function(){ inp.focus(); }, 150);
+  }
+  ov.classList.add("show");
+}
+function submitMemory(){
+  var ov = document.getElementById("memov");
+  var a = (document.getElementById("memInput").value || "").trim().toLowerCase().replace(/\s+/g," ");
+  var t = (auth.priv.mem_item || "").trim().toLowerCase().replace(/\s+/g," ");
+  if(a && a === t){
+    auth.priv.mem_result = "correct";
+    var m = mergedState();
+    var leveled = false;
+    if(!yes(m.mind_done)){
+      leveled = applyReward(auth.priv, "mind");
+      var r = getReported(cur.date); r.mind = true; setReported(r);
+    }
+    writePrivate(auth.sheetId, auth.priv).catch(function(){ auth.err = true; });
+    ov.classList.remove("show"); render(cur);
+    if(leveled){
+      var lo = document.getElementById("overlay");
+      lo.classList.remove("penalty");
+      setText("ovTitle","LEVEL UP");
+      setText("ovNote","MIND complete. +30 XP. Lv." + auth.priv.level);
+      lo.classList.add("show");
+      lo.onclick = function(){ lo.classList.remove("show"); };
+    }
+  } else {
+    auth.priv.mem_result = "wrong";
+    writePrivate(auth.sheetId, auth.priv).catch(function(){ auth.err = true; });
+    ov.classList.remove("show"); render(cur);
+  }
+}
 
 document.getElementById("authbtn").addEventListener("click", function(){
   if(!auth.gisReady || auth.pending) return;
