@@ -768,7 +768,7 @@ function findOrCreateSheet(){
 }
 
 function readPrivate(id){
-  return api("https://sheets.googleapis.com/v4/spreadsheets/"+id+"/values/state!A1:B2000").then(function(d){
+  return api("https://sheets.googleapis.com/v4/spreadsheets/"+id+"/values/state!A1:B10000").then(function(d){
     var s = {};
     (d.values||[]).forEach(function(row){ if(row[0] != null) s[String(row[0])] = row[1] != null ? String(row[1]) : ""; });
     return s;
@@ -850,6 +850,16 @@ function derive(raw, today){
     var m = k.match(/^day:(\d{4}-\d{2}-\d{2}):(body|mind|thesis)$/);
     if(m && yes(raw[k]) && m[1] > baseDate){ (days[m[1]] = days[m[1]] || {})[m[2]] = true; }
   });
+  var rests = {};
+  Object.keys(raw).forEach(function(k){
+    var m2 = k.match(/^day:(\d{4}-\d{2}-\d{2}):rest$/);
+    if(m2 && yes(raw[k]) && m2[1] > baseDate) rests[m2[1]] = true;
+  });
+  function gapAllRest(a, b){ /* every date after a and before b is an excused rest day */
+    var g = addDays(a, 1), guard = 0;
+    while(g < b && guard++ < 4000){ if(!rests[g]) return false; g = addDays(g, 1); }
+    return true;
+  }
   var dates = Object.keys(days).sort();
   var streak = parseInt(raw.base_streak||"0",10), best = parseInt(raw.base_best_streak||"0",10);
   var run = streak, prevAll = baseDate;
@@ -859,14 +869,15 @@ function derive(raw, today){
     if(f.mind){ mem += 1; xp += 30; }
     if(f.thesis){ intel += 1; xp += 40; }
     if(f.body && f.mind && f.thesis){
-      run = (prevAll && addDays(prevAll,1) === d) ? run + 1 : 1;
+      run = (prevAll && (addDays(prevAll,1) === d || (addDays(prevAll,1) < d && gapAllRest(prevAll, d)))) ? run + 1 : 1;
       if(run > best) best = run;
       prevAll = d;
       xp += 20;
     }
   });
   streak = prevAll ? run : 0;
-  if(today && prevAll && addDays(prevAll, 1) < today) streak = 0; // a missed/partial past day breaks it
+  /* a missed/partial past day breaks the chain; excused rest days preserve it (no bonus, no break) */
+  if(today && prevAll && addDays(prevAll, 1) < today && !gapAllRest(prevAll, today)) streak = 0;
   while(xp >= need){ xp -= need; lvl += 1; need = 100 + 20*lvl; }
   var rk = rankFor(lvl);
   return {level: String(lvl), xp: String(xp), xp_needed: String(need), str: String(str), mem: String(mem), int: String(intel),
@@ -899,10 +910,22 @@ function completeQuest(part){
   var k = dayKey(d, part);
   if(yes(auth.raw[k])) return Promise.resolve(false);
   auth.raw[k] = "yes";
+  /* thesis: last_thesis_step means COMPLETED step - advance it here, on completion only */
+  var oldStep = auth.raw.last_thesis_step, newStep = null;
+  if(part === "thesis"){
+    newStep = String(parseInt(oldStep || "0", 10) + 1);
+    auth.raw.last_thesis_step = newStep;
+  }
   auth.state = derive(auth.raw, cur && cur.date);
   render(cur);
-  return appendRows([[k, "yes"]]).then(function(){ return syncFromSheet(); }).then(function(){ return true; })
-    .catch(function(e){ delete auth.raw[k]; auth.state = derive(auth.raw, cur && cur.date); auth.err = true; render(cur); return false; });
+  var rows = [[k, "yes"]];
+  if(newStep != null) rows.push(["last_thesis_step", newStep]);
+  return appendRows(rows).then(function(){ return syncFromSheet(); }).then(function(){ return true; })
+    .catch(function(e){
+      delete auth.raw[k];
+      if(newStep != null){ if(oldStep == null) delete auth.raw.last_thesis_step; else auth.raw.last_thesis_step = oldStep; }
+      auth.state = derive(auth.raw, cur && cur.date); auth.err = true; render(cur); return false;
+    });
 }
 
 /* private vocabulary deck (his own PDF set) - never in the public repo */
@@ -955,6 +978,25 @@ function memMasteredCount(){
   return c;
 }
 
+/* canonical MIND rotation: number -> words -> flashcards -> quote, anchored at day 1 (2026-10-23 = number;
+   Oct 25 was flashcards, matching the record). The System may override per day via mind:DATE:type and
+   authors the day's secret item as mind:DATE:item (private sheet). Rest days: day:DATE:rest=yes. */
+var MIND_ROTATION = ["number","words","flashcards","quote"];
+var MIND_ANCHOR = "2026-10-23";
+function dayDiff(a, b){ return Math.round((new Date(b + "T12:00:00") - new Date(a + "T12:00:00")) / 86400000); }
+function mindTypeToday(){
+  var t = auth.raw && auth.raw["mind:" + cur.date + ":type"];
+  if(MIND_ROTATION.indexOf(t) >= 0) return t;
+  return MIND_ROTATION[((dayDiff(MIND_ANCHOR, cur.date) % 4) + 4) % 4];
+}
+function mindItemToday(){
+  try { return JSON.parse(auth.raw["mind:" + cur.date + ":item"] || "null"); } catch(e){ return null; }
+}
+function mindStudiedKey(d){ return "mind:" + d + ":studied"; }
+function mindStudiedToday(){
+  return yes(auth.raw[mindStudiedKey(cur.date)]) || yes(auth.raw[memStudiedKey(cur.date)]);
+}
+
 /* provision today's 10 cards from the private deck (private sheet => not publicly derivable) */
 function prepareDay(){
   if(!auth.ready || !auth.raw || !cur || !cur.date) return Promise.resolve();
@@ -997,9 +1039,15 @@ render = function(s){
     var qsm = document.getElementById("qs-mind");
     var tfm = todayFlags();
     if(!tfm.mind){
-      qsm.textContent = memTestTime()
-        ? "[RECALL TEST " + memMasteredCount() + "/10 - TAP TO ANSWER]"
-        : (memStudied() ? "[STUDIED - RECALL AT 21:30]" : "[TAP TO STUDY 10 FLASHCARDS]");
+      var mtype = mindTypeToday();
+      if(mtype !== "flashcards"){
+        qsm.textContent = memTestTime() ? "[RECALL TEST - TAP TO ANSWER]"
+          : (mindStudiedToday() ? "[STUDIED - RECALL AT 21:30]" : "[TAP TO STUDY TODAY'S ITEM]");
+      } else {
+        qsm.textContent = memTestTime()
+          ? "[RECALL TEST " + memMasteredCount() + "/10 - TAP TO ANSWER]"
+          : (memStudied() ? "[STUDIED - RECALL AT 21:30]" : "[TAP TO STUDY 10 FLASHCARDS]");
+      }
     }
     if(cur && cur.date && !auth._dayBusy){
       auth._dayBusy = true;
@@ -1052,10 +1100,14 @@ function openMindFlow(){
   var itemEl = document.getElementById("memItem");
   inp.style.display = "none"; inp.value = ""; inp2.style.display = "none"; inp2.value = ""; itemEl.style.display = "none";
   var tf = todayFlags();
+  var mtype = mindTypeToday();
   if(tf.mind){
     setText("memTitle","MIND COMPLETE");
-    setText("memNote","All 10 flashcards recalled today. Exact recall accepted.");
+    setText("memNote", mtype === "flashcards" ? "All 10 flashcards recalled today. Exact recall accepted."
+                                             : "Today's item recalled exactly. Memory holds.");
     btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
+  } else if(mtype !== "flashcards"){
+    openItemMindFlow(mtype, ov, inp, btn, itemEl);
   } else if(!memTestTime()){
     if(!memStudied()){
       var cards = memCards();
@@ -1148,6 +1200,109 @@ function submitMemCard(){
     setText("memNote","Not exact (" + corrections.join(" / ") + "). This card comes back later.");
     document.getElementById("memInput").value = ""; document.getElementById("memInput2").value = "";
     setTimeout(showMemPrompt, 1800);
+  }
+}
+
+/* item modes (number / words / quote): System authors mind:DATE:item each morning (private sheet);
+   study once (hidden after), exact recall from 21:30, no re-show after study - retries stay blind */
+function itemHtml(type, item){
+  if(type === "number"){
+    var dg = String(item.digits || "").replace(/\D/g, "");
+    return "<div style='font-size:clamp(26px,8vw,40px);letter-spacing:.18em;text-align:center;color:#fff'>" +
+           dg.replace(/(.{4})/g, "$1 ").trim() + "</div>";
+  }
+  if(type === "words"){
+    return (item.words || []).map(function(w, i){
+      return "<div style='margin:6px 0'><b>" + (i+1) + ".</b> " + w + "</div>";
+    }).join("");
+  }
+  return "<div style='margin:6px 0;font-style:italic'>\"" + (item.text || "") + "\"</div>";
+}
+function itemRecallOk(type, item, answer){
+  if(type === "number"){
+    return String(answer || "").replace(/\D/g, "") === String(item.digits || "").replace(/\D/g, "");
+  }
+  if(type === "words"){
+    var want = (item.words || []).map(normTxt);
+    var got = String(answer || "").split(/[\s,;]+/).filter(Boolean).map(normTxt);
+    if(got.length !== want.length) return false;
+    for(var i = 0; i < want.length; i++){ if(got[i] !== want[i]) return false; }
+    return true;
+  }
+  return normTxt(answer) === normTxt(item.text || "");
+}
+function openItemMindFlow(type, ov, inp, btn, itemEl){
+  var item = mindItemToday();
+  if(!item){
+    setText("memTitle","MIND");
+    setText("memNote","[TODAY'S ITEM PENDING SYNC - THE SYSTEM DELIVERS IT AT 09:00]");
+    btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
+    return;
+  }
+  if(!memTestTime()){
+    if(!mindStudiedToday()){
+      var notes = {number:"Memorize the number, digit for digit. It disappears until the 21:30 recall test.",
+                   words:"Memorize all 10 words IN ORDER. They disappear until the 21:30 recall test.",
+                   quote:"Memorize the quote word for word. It disappears until the 21:30 recall test."};
+      setText("memTitle","STUDY - " + type.toUpperCase());
+      setText("memNote", notes[type]);
+      itemEl.innerHTML = itemHtml(type, item);
+      itemEl.style.display = "block";
+      btn.textContent = "MARK STUDIED - HIDE IT";
+      btn.onclick = function(){
+        var k = mindStudiedKey(cur.date);
+        auth.raw[k] = "yes";
+        appendRows([[k, "yes"]]).catch(function(){ auth.err = true; });
+        ov.classList.remove("show"); render(cur);
+      };
+    } else {
+      setText("memTitle","STUDIED");
+      setText("memNote","The item is hidden now. Recall test at 21:30.");
+      btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
+    }
+    return;
+  }
+  if(!mindStudiedToday()){
+    /* late start: one reveal now, then the recall flow applies (honor system, studied row records it) */
+    setText("memTitle","STUDY NOW - " + type.toUpperCase());
+    setText("memNote","Late start. Memorize it, hide it, then the recall test begins.");
+    itemEl.innerHTML = itemHtml(type, item);
+    itemEl.style.display = "block";
+    btn.textContent = "MARK STUDIED - HIDE IT";
+    btn.onclick = function(){
+      var k = mindStudiedKey(cur.date);
+      auth.raw[k] = "yes";
+      appendRows([[k, "yes"]]).catch(function(){ auth.err = true; });
+      ov.classList.remove("show"); render(cur);
+    };
+    return;
+  }
+  setText("memTitle","RECALL TEST - 21:30");
+  var prompts = {number:"Type the number exactly.", words:"Type all 10 words in order.", quote:"Type the quote exactly."};
+  setText("memNote", prompts[type] + " The item stays hidden.");
+  inp.placeholder = "type it exactly";
+  inp.style.display = "block";
+  btn.textContent = "SUBMIT";
+  btn.onclick = function(){ submitItemRecall(type, item); };
+  setTimeout(function(){ inp.focus(); }, 150);
+}
+function submitItemRecall(type, item){
+  var inp = document.getElementById("memInput");
+  var btn = document.getElementById("memBtn");
+  if(itemRecallOk(type, item, inp.value)){
+    inp.style.display = "none";
+    setText("memTitle","EXACT RECALL");
+    setText("memNote","MIND complete: +30 XP, MEM +1.");
+    btn.textContent = "CLOSE";
+    btn.onclick = function(){ document.getElementById("memov").classList.remove("show"); };
+    var beforeLvl = parseInt(auth.state.level, 10);
+    var r = getReported(cur.date); r.mind = true; setReported(r);
+    completeQuest("mind").then(function(changed){
+      if(changed && parseInt(auth.state.level,10) > beforeLvl) showLevelUp("MIND complete. +30 XP.");
+    });
+  } else {
+    setText("memNote","Not exact. The item stays hidden - try again.");
+    inp.value = ""; inp.focus();
   }
 }
 
