@@ -734,7 +734,7 @@ function setupPrivate(){
       if(raw.schema !== "2"){
         return stateReadyP.then(function(){ return migrateToV2(id, raw); });
       }
-      auth.raw = raw; auth.state = derive(raw); auth.ready = true; auth.err = false;
+      auth.raw = raw; auth.state = derive(raw, cur && cur.date); auth.ready = true; auth.err = false;
       return prepareDay();
     });
   });
@@ -768,7 +768,7 @@ function migrateToV2(id, raw){
   base.schema = "2";
   base["deck:clothing"] = JSON.stringify(DECK);
   return writePrivate(id, base).then(function(){
-    auth.raw = base; auth.state = derive(base); auth.ready = true; auth.err = false;
+    auth.raw = base; auth.state = derive(base, cur && cur.date); auth.ready = true; auth.err = false;
     return prepareDay();
   });
 }
@@ -786,7 +786,7 @@ function memMarkKey(d, i, lang){ return "mem:" + d + ":m:" + i + ":" + lang; }
 function addDays(d, n){ var t = new Date(d + "T12:00:00"); t.setDate(t.getDate() + n); return t.toISOString().slice(0,10); }
 
 /* derive full progress from base aggregates + append-only day rows */
-function derive(raw){
+function derive(raw, today){
   var lvl = parseInt(raw.base_level||"1",10), xp = parseInt(raw.base_xp||"0",10), need = parseInt(raw.base_xp_needed||"120",10);
   var str = parseInt(raw.base_str||"0",10), mem = parseInt(raw.base_mem||"0",10), intel = parseInt(raw.base_int||"0",10);
   var baseDate = raw.base_date || "";
@@ -811,6 +811,7 @@ function derive(raw){
     }
   });
   streak = prevAll ? run : 0;
+  if(today && prevAll && addDays(prevAll, 1) < today) streak = 0; // a missed/partial past day breaks it
   while(xp >= need){ xp -= need; lvl += 1; need = 100 + 20*lvl; }
   var rk = rankFor(lvl);
   return {level: String(lvl), xp: String(xp), xp_needed: String(need), str: String(str), mem: String(mem), int: String(intel),
@@ -833,7 +834,7 @@ function appendRows(rows){
 
 function syncFromSheet(){
   return readPrivate(auth.sheetId).then(function(raw){
-    auth.raw = raw; auth.state = derive(raw); render(cur); return auth.state;
+    auth.raw = raw; auth.state = derive(raw, cur && cur.date); render(cur); return auth.state;
   });
 }
 
@@ -843,10 +844,10 @@ function completeQuest(part){
   var k = dayKey(d, part);
   if(yes(auth.raw[k])) return Promise.resolve(false);
   auth.raw[k] = "yes";
-  auth.state = derive(auth.raw);
+  auth.state = derive(auth.raw, cur && cur.date);
   render(cur);
   return appendRows([[k, "yes"]]).then(function(){ return syncFromSheet(); }).then(function(){ return true; })
-    .catch(function(e){ delete auth.raw[k]; auth.state = derive(auth.raw); auth.err = true; render(cur); return false; });
+    .catch(function(e){ delete auth.raw[k]; auth.state = derive(auth.raw, cur && cur.date); auth.err = true; render(cur); return false; });
 }
 
 /* private vocabulary deck (his own PDF set) - never in the public repo */
@@ -1077,17 +1078,16 @@ function submitMemCard(){
     if(matchAlt(inp2.value, card.ar)){ rows.push([memMarkKey(cur.date, item.i, "a"), "yes"]); }
     else corrections.push("Arabic: " + card.ar[0]);
   }
+  rows.forEach(function(r){ auth.raw[r[0]] = "yes"; });
+  if(rows.length) appendRows(rows).catch(function(){ auth.err = true; render(cur); });
   if(!corrections.length){
-    rows.forEach(function(r){ auth.raw[r[0]] = "yes"; });
     memQueue.shift();
-    if(rows.length) appendRows(rows).catch(function(){ auth.err = true; render(cur); });
     showMemPrompt();
     render(cur);
   } else {
-    rows.forEach(function(r){ auth.raw[r[0]] = "yes"; });
-    if(rows.length) appendRows(rows).catch(function(){ auth.err = true; render(cur); });
-    memQueue.push(memQueue.shift()); // retry later with spacing, per the System's protocol
-    var langs = (item.f && item.a) ? "both" : "one";
+    if(item.f && !corrections.some(function(c){ return c.indexOf("French:") === 0; })) item.f = false;
+    if(item.a && !corrections.some(function(c){ return c.indexOf("Arabic:") === 0; })) item.a = false;
+    memQueue.push(memQueue.shift()); // retry the missing language later with spacing, per the System's protocol
     setText("memNote","Not exact (" + corrections.join(" / ") + "). This card comes back later.");
     document.getElementById("memInput").value = ""; document.getElementById("memInput2").value = "";
     setTimeout(showMemPrompt, 1800);
