@@ -401,6 +401,7 @@ var STAT_INFO = {
 };
 
 var cur = {date:"", level:"1"};
+var stateReadyP = new Promise(function(r){ window.__stateResolve = r; });
 
 function parseGviz(text){
   var i = text.indexOf("{");
@@ -543,6 +544,7 @@ function loadState(){
       try { localStorage.setItem("gate_state", JSON.stringify(s)); } catch(e){}
       document.getElementById("offline").classList.remove("show");
       render(s);
+      if(window.__stateResolve){ var f = window.__stateResolve; window.__stateResolve = null; f(); }
     })
     .catch(showOffline);
 }
@@ -719,12 +721,14 @@ function setupPrivate(){
   return findOrCreateSheet().then(function(id){
     auth.sheetId = id;
     return readPrivate(id).then(function(ps){
-      if(!ps.level){
-        var seed = {};
-        PROGRESS_KEYS.forEach(function(k){ if(cur && cur[k] != null) seed[k] = cur[k]; });
-        if(!seed.xp_needed) seed.xp_needed = "120";
-        ps = seed;
-        return writePrivate(id, seed).then(function(){ auth.priv = ps; auth.ready = true; auth.err = false; });
+      if(!ps.level || !ps.date){
+        return stateReadyP.then(function(){
+          var seed = {};
+          PROGRESS_KEYS.forEach(function(k){ if(cur && cur[k] != null) seed[k] = cur[k]; });
+          if(!seed.xp_needed) seed.xp_needed = "120";
+          ps = seed;
+          return writePrivate(id, seed).then(function(){ auth.priv = ps; auth.ready = true; auth.err = false; });
+        });
       }
       auth.priv = ps; auth.ready = true; auth.err = false;
     });
