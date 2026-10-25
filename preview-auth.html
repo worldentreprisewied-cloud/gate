@@ -168,6 +168,8 @@ body{
 .testbanner{margin-top:14px;border-radius:12px;border:1px solid rgba(255,207,111,.35);
   background:rgba(70,50,8,.55);color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.18em;
   text-align:center;padding:9px 8px;line-height:1.7}
+.redirlink{display:none;text-align:center;margin-top:8px}
+.redirlink a{color:rgba(232,244,255,.45);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
 
 /* ---------- penalty ---------- */
 .pen{border-color:rgba(255,110,125,.3);
@@ -268,6 +270,7 @@ body{
 
   <div class="offline" id="offline">[CONNECTION LOST - SHOWING LAST KNOWN STATE]</div>
   <div class="testbanner">PRIVATE SYNC TEST BUILD - COMPLETIONS HERE DO NOT COUNT FOR THE SYSTEM YET</div>
+  <div class="redirlink" id="redirlink"><a href="#" id="redira">POPUP BLOCKED? TAP FOR REDIRECT SIGN-IN</a></div>
 
   <div class="card pen rise" id="penalty" style="display:none">
     <div class="chead"><span class="pip"></span><h2>PENALTY QUEST: SURVIVAL</h2><div class="ln"></div></div>
@@ -669,7 +672,13 @@ var auth = {token:null, sheetId:null, ready:false, err:false, pending:false};
 function gisInit(){
   if(!(window.google && google.accounts && google.accounts.oauth2)){ setTimeout(gisInit, 400); return; }
   auth.client = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID, scope: SCOPE, callback: onToken
+    client_id: CLIENT_ID, scope: SCOPE, callback: onToken,
+    error_callback: function(err){
+      auth.pending = false;
+      var tap = auth._explicitTap; auth._explicitTap = false;
+      if(tap && err && err.type === "popup_failed_to_open"){ oauthRedirect(); return; }
+      auth.err = true; render();
+    }
   });
   auth.gisReady = true;
   try{
@@ -688,6 +697,50 @@ function onToken(resp){
   setupPrivate().then(function(){ render(); }).catch(function(err){
     auth.err = true; auth.token = null; render();
   });
+}
+
+/* full-page redirect sign-in (fallback when the popup cannot open, e.g. some mobile browsers).
+   Manual implicit flow per Google's OAuth2 for client-side web apps: token returns in the URL
+   fragment at our exact registered redirect URI; state is validated against sessionStorage and
+   the fragment is cleared from history immediately. Token lives in memory only. */
+var REDIRECT_URI = location.origin + location.pathname;
+
+function oauthRedirect(){
+  try{
+    var rnd = new Uint8Array(16);
+    (window.crypto || {}).getRandomValues ? crypto.getRandomValues(rnd) : rnd.forEach(function(_,i){ rnd[i] = Math.floor(Math.random()*256); });
+    var st = ""; for(var i = 0; i < 16; i++) st += rnd[i].toString(16).padStart(2, "0");
+    sessionStorage.setItem("gate_oauth_state", st);
+    if(location.search) sessionStorage.setItem("gate_oauth_qs", location.search);
+    var params = "client_id=" + encodeURIComponent(CLIENT_ID)
+      + "&redirect_uri=" + encodeURIComponent(REDIRECT_URI)
+      + "&response_type=token"
+      + "&scope=" + encodeURIComponent(SCOPE)
+      + "&state=" + encodeURIComponent(st)
+      + "&include_granted_scopes=true";
+    location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + params;
+  }catch(e){ auth.pending = false; auth.err = true; render(); }
+}
+
+function handleOAuthCallback(){
+  if(!location.hash || location.hash.indexOf("access_token=") < 0) return false;
+  var m = {};
+  location.hash.substring(1).split("&").forEach(function(p){
+    var kv = p.split("="); m[kv[0]] = decodeURIComponent(kv[1] || "");
+  });
+  var saved = null, savedQs = "";
+  try{
+    saved = sessionStorage.getItem("gate_oauth_state");
+    savedQs = sessionStorage.getItem("gate_oauth_qs") || "";
+    sessionStorage.removeItem("gate_oauth_state");
+    sessionStorage.removeItem("gate_oauth_qs");
+  }catch(e){}
+  /* clear the fragment first - the token must not linger in URL/history */
+  var back = location.pathname + ((saved && m.state === saved) ? savedQs : location.search);
+  history.replaceState(null, "", back);
+  if(!saved || m.state !== saved || !m.access_token){ auth.err = true; render(); return false; }
+  onToken({access_token: m.access_token});
+  return true;
 }
 
 function api(url, opts){
@@ -953,6 +1006,8 @@ render = function(s){
       prepareDay().then(function(){ auth._dayBusy = false; }, function(){ auth._dayBusy = false; });
     }
   }
+  var rl = document.getElementById("redirlink");
+  if(rl) rl.style.display = auth.ready ? "none" : "block";
   var b = document.getElementById("authbtn");
   if(auth.ready){ b.textContent = "SYNCED"; b.classList.add("signed"); b.classList.remove("autherr"); }
   else if(auth.pending){ b.textContent = "..."; }
@@ -1106,11 +1161,20 @@ document.getElementById("authbtn").addEventListener("click", function(){
     return;
   }
   auth.err = false; auth.pending = true; render();
+  auth._explicitTap = true;
   try{
     auth.client.requestAccessToken({prompt: localStorage.getItem("gate_auth_ok")==="yes" ? "" : "consent"});
-  }catch(e){ auth.pending = false; auth.err = true; render(); }
+  }catch(e){ auth._explicitTap = false; auth.pending = false; auth.err = true; render(); }
 });
 
+document.getElementById("redira").addEventListener("click", function(e){
+  e.preventDefault();
+  if(auth.pending || auth.ready) return;
+  auth.err = false; auth.pending = true; render();
+  oauthRedirect();
+});
+
+handleOAuthCallback();
 gisInit();
 
 loadState();
