@@ -467,11 +467,11 @@ function renderTimer(){
   if(cur.date < today){
     box.classList.add("late");
     setText("ttime","DEADLINE PASSED");
-    setText("trem","NEW QUEST ARRIVES 09:00");
+    setText("trem","NEW QUEST ARRIVES 06:00");
     return;
   }
   if(cur.date > today){
-    box.classList.remove("late"); setText("ttime","--:--"); setText("trem","NEW QUEST ACTIVE 09:00"); return;
+    box.classList.remove("late"); setText("ttime","--:--"); setText("trem","NEW QUEST ACTIVE 06:00"); return;
   }
   var pp = parisParts();
   var nowSec = (parseInt(pp.hour,10) % 24)*3600 + parseInt(pp.minute,10)*60 + parseInt(pp.second,10);
@@ -616,7 +616,7 @@ document.getElementById("rankbtn").addEventListener("click", function(){
 });
 document.getElementById("rulesbtn").addEventListener("click", function(){
   openModal("[ SYSTEM GUIDE ]",
-    "<div class='rh'>DAILY QUEST</div>Arrives 09:00. Deadline 23:59. Three parts: BODY, MIND, THESIS. At 21:30 the System checks what remains." +
+    "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, THESIS. At 21:30 the System checks what remains." +
     "<div class='rh'>BODY - STR</div>Daily training, no equipment: push-ups, squats, sit-ups, plank. Current targets: 5 push-ups (knees allowed), 10 squats, 5 sit-ups, 20-second plank. Targets stay fixed - they rise gradually only when they feel comfortable with good form, never automatically with level-ups. Never push through pain." +
     "<div class='rh'>MIND - MEM</div>Memory training rotates daily: numbers, words in order, interpreting flashcards, quotes. The item is given in chat each morning. The scheduled test is at 21:30, without looking; an early exact answer also counts when the System accepts it. Only exact recall earns MEM." +
     "<div class='rh'>THESIS - INT</div>One concrete 45-minute step per day, in order: coding, analysis chapter, theory chapters, introduction and conclusion. A finished step never repeats." +
@@ -1021,7 +1021,7 @@ function dayOpen(){
 function showClosed(){
   var ov = document.getElementById("memov");
   setText("memTitle","DEADLINE PASSED");
-  setText("memNote","[THE DAY IS CLOSED - A NEW QUEST ARRIVES AT 09:00]");
+  setText("memNote","[THE DAY IS CLOSED - A NEW QUEST ARRIVES AT 06:00]");
   var itemEl = document.getElementById("memItem"); itemEl.style.display = "none";
   var inp = document.getElementById("memInput"); inp.style.display = "none";
   var inp2 = document.getElementById("memInput2"); inp2.style.display = "none";
@@ -1278,7 +1278,7 @@ function openItemMindFlow(type, ov, inp, btn, itemEl){
   var item = mindItemToday();
   if(!item){
     setText("memTitle","MIND");
-    setText("memNote","[TODAY'S ITEM PENDING SYNC - THE SYSTEM DELIVERS IT AT 09:00]");
+    setText("memNote","[TODAY'S ITEM PENDING SYNC - THE SYSTEM DELIVERS IT AT 06:00]");
     btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
     return;
   }
@@ -1372,3 +1372,4 @@ if("serviceWorker" in navigator){
 </script>
 </body>
 </html>
+
