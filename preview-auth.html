@@ -369,7 +369,7 @@ body{
           </div>
         </div>
       </button>
-      <div class="questnote">TAP A PART TO MARK IT REPORTED.<br>THE SYSTEM CONFIRMS COMPLETION IN CHAT.</div>
+      <div class="questnote">TAP A PART WHEN DONE.<br>PRIVATE SYNC RECORDS IT.</div>
     </div>
   </div>
 
@@ -906,6 +906,7 @@ function syncFromSheet(){
 
 /* one append-only row per completion; re-read then derive -> no clobbering, duplicates idempotent */
 function completeQuest(part){
+  if(!dayOpen()) return Promise.resolve(false);
   var d = cur.date;
   var k = dayKey(d, part);
   if(yes(auth.raw[k])) return Promise.resolve(false);
@@ -997,6 +998,29 @@ function mindStudiedToday(){
   return yes(auth.raw[mindStudiedKey(cur.date)]) || yes(auth.raw[memStudiedKey(cur.date)]);
 }
 
+/* deadline guard: completions/study/recall are open only on the scaffold day itself
+   (deadline 23:59 of cur.date). ?testdate= is a TEST-BUILD-ONLY clock pin, stripped in production. */
+function deviceDate(){
+  var m = location.search.match(/[?&]testdate=(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  var n = new Date();
+  return n.getFullYear() + "-" + String(n.getMonth()+1).padStart(2,"0") + "-" + String(n.getDate()).padStart(2,"0");
+}
+function dayOpen(){
+  return !!(cur && cur.date) && deviceDate() <= cur.date;
+}
+function showClosed(){
+  var ov = document.getElementById("memov");
+  setText("memTitle","DEADLINE PASSED");
+  setText("memNote","[THE DAY IS CLOSED - A NEW QUEST ARRIVES AT 09:00]");
+  var itemEl = document.getElementById("memItem"); itemEl.style.display = "none";
+  var inp = document.getElementById("memInput"); inp.style.display = "none";
+  var inp2 = document.getElementById("memInput2"); inp2.style.display = "none";
+  var btn = document.getElementById("memBtn");
+  btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
+  ov.classList.add("show");
+}
+
 /* provision today's 10 cards from the private deck (private sheet => not publicly derivable) */
 function prepareDay(){
   if(!auth.ready || !auth.raw || !cur || !cur.date) return Promise.resolve();
@@ -1023,6 +1047,14 @@ function mergedState(){
     if(auth.state[k] != null) m[k] = String(auth.state[k]);
   });
   var tf = todayFlags();
+  if(auth.raw){
+    var mtype = mindTypeToday();
+    var mq = {number:"A number to memorize - item held by the System. Recall test at 21:30.",
+              words:"10 words in order - item held by the System. Recall test at 21:30.",
+              flashcards:"10 memory flashcards - item held by the System. Recall test at 21:30.",
+              quote:"A quote to memorize - item held by the System. Recall test at 21:30."};
+    m.quest_mind = mq[mtype];
+  }
   m.body_done = tf.body ? "yes" : "no";
   m.mind_done = tf.mind ? "yes" : "no";
   m.thesis_done = tf.thesis ? "yes" : "no";
@@ -1079,6 +1111,7 @@ function showLevelUp(note){
     var tf = todayFlags();
     if(tf[p[1]]) return; // already complete: first listener toggled expansion
     e.stopPropagation();
+    if(!dayOpen()){ showClosed(); return; }
     if(p[1] === "mind"){ openMindFlow(); return; } // flashcard study/recall flow
     var beforeLvl = parseInt(auth.state.level, 10);
     var r = getReported(cur.date); r[p[1]] = true; setReported(r);
@@ -1093,6 +1126,7 @@ function showLevelUp(note){
 var memQueue = null;
 function openMindFlow(){
   if(!auth.ready || !auth.raw) return;
+  if(!dayOpen()){ showClosed(); return; }
   var ov = document.getElementById("memov");
   var inp = document.getElementById("memInput");
   var inp2 = document.getElementById("memInput2");
@@ -1262,24 +1296,10 @@ function openItemMindFlow(type, ov, inp, btn, itemEl){
     }
     return;
   }
-  if(!mindStudiedToday()){
-    /* late start: one reveal now, then the recall flow applies (honor system, studied row records it) */
-    setText("memTitle","STUDY NOW - " + type.toUpperCase());
-    setText("memNote","Late start. Memorize it, hide it, then the recall test begins.");
-    itemEl.innerHTML = itemHtml(type, item);
-    itemEl.style.display = "block";
-    btn.textContent = "MARK STUDIED - HIDE IT";
-    btn.onclick = function(){
-      var k = mindStudiedKey(cur.date);
-      auth.raw[k] = "yes";
-      appendRows([[k, "yes"]]).catch(function(){ auth.err = true; });
-      ov.classList.remove("show"); render(cur);
-    };
-    return;
-  }
+  /* no late reveal: the item was shown in the study window only; un-studied means an honest miss */
   setText("memTitle","RECALL TEST - 21:30");
   var prompts = {number:"Type the number exactly.", words:"Type all 10 words in order.", quote:"Type the quote exactly."};
-  setText("memNote", prompts[type] + " The item stays hidden.");
+  setText("memNote", prompts[type] + " The item stays hidden." + (mindStudiedToday() ? "" : " No study was recorded today."));
   inp.placeholder = "type it exactly";
   inp.style.display = "block";
   btn.textContent = "SUBMIT";
