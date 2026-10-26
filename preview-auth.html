@@ -447,30 +447,43 @@ function setReported(r){
   try{ localStorage.setItem("gate_reported_v1", JSON.stringify(r)); }catch(e){}
 }
 
-function localDateStr(d){
-  return d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2) + "-" + ("0"+d.getDate()).slice(-2);
+/* Game clock: Europe/Paris wall time derived from the device clock. The device clock
+   itself is trusted (honest limitation); timezone travel does not move the game window. */
+function parisParts(){
+  var p = {};
+  new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Paris", year:"numeric", month:"2-digit",
+    day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false})
+    .formatToParts(new Date()).forEach(function(x){ p[x.type] = x.value; });
+  return p;
 }
+function parisDateStr(){ var p = parisParts(); return p.year + "-" + p.month + "-" + p.day; }
+function parisMinutes(){ var p = parisParts(); return (parseInt(p.hour,10) % 24)*60 + parseInt(p.minute,10); }
 
 function renderTimer(){
   if(cur && cur.event === "rest"){ var rbox = document.getElementById("timerbox"); rbox.classList.remove("late"); setText("ttime","REST DAY"); setText("trem", (parseInt(cur.streak||"0",10) > 0) ? "NO PENALTY - STREAK HELD" : "NO PENALTY"); return; }
-  var now = new Date();
-  var end = new Date(now); end.setHours(23,59,0,0);
   var box = document.getElementById("timerbox");
   if(!cur.date){ box.classList.remove("late"); setText("ttime","--:--"); setText("trem",""); return; }
-  if(cur.date < localDateStr(now)){
+  var today = deviceDate();
+  if(cur.date < today){
     box.classList.add("late");
     setText("ttime","DEADLINE PASSED");
     setText("trem","NEW QUEST ARRIVES 09:00");
     return;
   }
-  if(now > end){
+  if(cur.date > today){
+    box.classList.remove("late"); setText("ttime","--:--"); setText("trem","NEW QUEST ACTIVE 09:00"); return;
+  }
+  var pp = parisParts();
+  var nowSec = (parseInt(pp.hour,10) % 24)*3600 + parseInt(pp.minute,10)*60 + parseInt(pp.second,10);
+  var endSec = 23*3600 + 59*60;
+  if(nowSec > endSec){
     box.classList.add("late");
     setText("ttime","DEADLINE PASSED");
     setText("trem","AWAITING NEW QUEST");
     return;
   }
   box.classList.remove("late");
-  var ms = end - now;
+  var ms = (endSec - nowSec)*1000;
   var h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
   setText("ttime", h + "H " + (m<10?"0":"") + m + "M");
   var left = [];
@@ -517,9 +530,6 @@ function render(s){
     if(yes(p[2])){
       el.classList.add("done");
       qs.textContent = "[COMPLETE] " + p[4] + " - TAP FOR DETAILS";
-    } else if(p[3]){
-      el.classList.add("reported");
-      qs.textContent = "[REPORTED - AWAITING SYSTEM]";
     } else {
       qs.textContent = "REWARD: " + p[4];
     }
@@ -958,7 +968,7 @@ function matchAlt(input, alts){
 
 function memTestTime(){
   if(/[?&]memtest=now/.test(location.search)) return true;
-  var n = new Date(); return n.getHours()*60 + n.getMinutes() >= 21*60+30;
+  return parisMinutes() >= 21*60+30;
 }
 
 function memCards(){
@@ -1003,11 +1013,10 @@ function mindStudiedToday(){
 function deviceDate(){
   var m = location.search.match(/[?&]testdate=(\d{4}-\d{2}-\d{2})/);
   if(m) return m[1];
-  var n = new Date();
-  return n.getFullYear() + "-" + String(n.getMonth()+1).padStart(2,"0") + "-" + String(n.getDate()).padStart(2,"0");
+  return parisDateStr();
 }
 function dayOpen(){
-  return !!(cur && cur.date) && deviceDate() <= cur.date;
+  return !!(cur && cur.date) && deviceDate() === cur.date;
 }
 function showClosed(){
   var ov = document.getElementById("memov");
