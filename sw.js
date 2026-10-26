@@ -1,4 +1,4 @@
-var CACHE = "gate-v5";
+var CACHE = "gate-v6";
 var SHELL = ["./", "index.html", "gate-hero.jpg", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function(e){
@@ -35,3 +35,4 @@ self.addEventListener("fetch", function(e){
     })
   );
 });
+
