@@ -1049,10 +1049,10 @@ function mergedState(){
   var tf = todayFlags();
   if(auth.raw){
     var mtype = mindTypeToday();
-    var mq = {number:"A number to memorize - item held by the System. Recall test at 21:30.",
-              words:"10 words in order - item held by the System. Recall test at 21:30.",
-              flashcards:"10 memory flashcards - item held by the System. Recall test at 21:30.",
-              quote:"A quote to memorize - item held by the System. Recall test at 21:30."};
+    var mq = {number:"A number to memorize - study and recall in the app. Recall test at 21:30.",
+              words:"10 words in order - study and recall in the app. Recall test at 21:30.",
+              flashcards:"10 memory flashcards - study and recall in the app. Recall test at 21:30.",
+              quote:"A quote to memorize - study and recall in the app. Recall test at 21:30."};
     m.quest_mind = mq[mtype];
   }
   m.body_done = tf.body ? "yes" : "no";
