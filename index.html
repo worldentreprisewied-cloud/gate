@@ -225,6 +225,18 @@ body{
 .overlay.penalty .big{color:#ffd7db;text-shadow:0 0 24px rgba(255,93,108,1),0 0 90px rgba(255,93,108,.6)}
 .overlay.penalty .ov-burst{background:radial-gradient(circle at 50% 50%, rgba(255,110,125,.3), rgba(160,40,55,.13) 34%, transparent 62%)}
 .overlay.penalty .note{color:#ffc9cf;text-shadow:0 0 12px rgba(255,93,108,.7)}
+#penparts{padding:0 18px 16px}
+.penrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:rgba(40,10,16,.45);border:1px solid rgba(255,93,108,.35);border-radius:8px;padding:10px 12px;margin:8px 0;color:#ffd7db;font-family:"Rajdhani",sans-serif;font-size:15px;font-weight:600;cursor:pointer}
+.penrow .pbox{width:16px;height:16px;border:1px solid rgba(255,150,160,.7);border-radius:4px;flex:none;display:flex;align-items:center;justify-content:center}
+.penrow.done{opacity:.65;border-color:rgba(255,93,108,.15);cursor:default}
+.penrow.done .pbox{background:rgba(255,93,108,.35)}
+.penrow.done .pbox::after{content:"\2713";color:#fff;font-size:11px;line-height:1}
+.penrow.info{cursor:default;background:rgba(20,16,10,.4);border-color:rgba(255,200,120,.25);color:#ffe9c9}
+.penrow.info .pbox{border-color:rgba(255,220,150,.6)}
+.penrow.info.done .pbox{background:rgba(255,200,120,.3)}
+.tbtns{flex-wrap:wrap;justify-content:flex-end}
+#weeklybtn,#matbtn{padding:8px 10px;font-size:10px;letter-spacing:.12em;text-indent:.12em;min-height:36px}
+.mbody a{color:#9fe4ff;text-decoration:none;border-bottom:1px solid rgba(159,228,255,.4)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 
 /* entrance */
@@ -258,6 +270,8 @@ body{
         <div class="tbtns">
           <button class="tbtn" id="authbtn" type="button">SIGN IN</button>
           <button class="tbtn" id="rulesbtn" type="button">RULES</button>
+          <button class="tbtn" id="weeklybtn" type="button">WEEKLY</button>
+          <button class="tbtn" id="matbtn" type="button">MATERIALS</button>
           <button class="tbtn" id="syncbtn" type="button">SYNC</button>
         </div>
       </div>
@@ -270,7 +284,8 @@ body{
 
   <div class="card pen rise" id="penalty" style="display:none">
     <div class="chead"><span class="pip"></span><h2>PENALTY QUEST: SURVIVAL</h2><div class="ln"></div></div>
-    <div class="cbody">The penalty directive is active. No XP is lost - but the System does not forget.</div>
+    <div class="cbody" id="penbody">The penalty directive is active. No XP is lost - but the System does not forget.</div>
+    <div id="penparts"></div>
   </div>
 
   <div class="card rise2">
@@ -622,9 +637,46 @@ document.getElementById("rulesbtn").addEventListener("click", function(){
     "<div class='rh'>RANKS</div>E at Levels 1-9, D 10-19, C 20-34, B 35-49, A 50-69, S 70+. Tap the emblem for the full path and titles." +
     "<div class='rh'>STREAK</div>Consecutive days with all three parts complete. BEST keeps the longest run." +
     "<div class='rh'>NIGHT CHECK</div>At 21:30 the memory recall test opens in the app, and the System checks what remains unfinished." +
-    "<div class='rh'>PENALTY</div>Any part unfinished at 23:59: the streak resets to zero, XP is kept. Next morning opens a Penalty Quest: 30 extra squats and 2 minutes of wall-sit at Levels 1-3 (50 squats, 5 minutes above), plus the unfinished thesis step." +
-    "<div class='rh'>WEEKLY REPORT</div>Every Sunday at 20:00 the System delivers a weekly Status Window in chat: gains, days cleared, thesis steps, next milestone." +
-    "<div class='rh'>THE APP</div><span class='dim'>The whole System lives in this app: quests, study material, recall tests, check-offs and progress. Tap a part when done - private sync records it at once. Only exact recall earns MEM. Failure will result in a penalty.</span>");
+    "<div class='rh'>PENALTY</div>Any part unfinished at 23:59: the streak resets to zero, XP is kept. Next morning opens a Penalty Quest: 30 extra squats and 2 minutes of wall-sit at Levels 1-3 (50 squats, 5 minutes above), plus the unfinished thesis step. The penalty is completed in this app - tap each part as you finish it." +
+    "<div class='rh'>WEEKLY REPORT</div>The weekly Status Window lives in this app - tap WEEKLY: days cleared, gains, thesis steps, streak, next milestone." +
+    "<div class='rh'>THE APP</div><span class='dim'>The whole System lives in this app: quests, study material, recall tests, check-offs, thesis materials and progress. Tap a part when done - private sync records it at once. Only exact recall earns MEM. Failure will result in a penalty.</span>");
+});
+document.getElementById("matbtn").addEventListener("click", function(){
+  if(!auth.ready || !auth.raw){ openModal("[ MATERIALS ]", "<span class='dim'>Sign in to open your materials - private sync keeps them yours.</span>"); return; }
+  var mats = [];
+  try { mats = JSON.parse(auth.raw["thesis:materials"] || "[]"); } catch(e){}
+  var html = "<div class='rh'>THESIS</div>";
+  if(!mats.length){ html += "<span class='dim'>No thesis materials synced yet.</span>"; }
+  mats.forEach(function(m){
+    html += "<div style='margin:10px 0'><a href='" + String(m.url).replace(/'/g, "%27") + "' target='_blank' rel='noopener'>" + m.label + "</a></div>";
+  });
+  html += "<span class='dim'>Materials open in your own Google account. Nothing here is public.</span>";
+  openModal("[ MATERIALS ]", html);
+});
+document.getElementById("weeklybtn").addEventListener("click", function(){
+  if(!auth.ready || !auth.raw){ openModal("[ WEEKLY STATUS WINDOW ]", "<span class='dim'>Sign in to open the weekly Status Window.</span>"); return; }
+  var today = deviceDate();
+  var cleared = 0, xp = 0, steps = 0, parts = 0;
+  for(var i = 6; i >= 0; i--){
+    var d = addDays(today, -i);
+    if(d <= (auth.raw.base_date || "")) continue;
+    var b = yes(auth.raw[dayKey(d,"body")]), m = yes(auth.raw[dayKey(d,"mind")]), t = yes(auth.raw[dayKey(d,"thesis")]);
+    if(b){ xp += 30; parts++; }
+    if(m){ xp += 30; parts++; }
+    if(t){ xp += 40; parts++; steps++; }
+    if(b && m && t){ xp += 20; cleared++; }
+  }
+  var need = Math.max(0, parseInt(auth.state.xp_needed||"120",10) - parseInt(auth.state.xp||"0",10));
+  var verdict = cleared >= 6 ? "The System acknowledges your consistency."
+              : cleared >= 4 ? "A solid week. The System expects more."
+              : cleared >= 1 ? "Days were cleared. Consistency is the next test."
+              : "No day cleared this window. The System does not forget.";
+  openModal("[ WEEKLY STATUS WINDOW ]",
+    "<div class='rh'>LAST 7 DAYS</div>Days fully cleared: " + cleared + " / 7" +
+    "<div class='rh'>GAINS</div>Quest parts cleared: " + parts + " (+" + xp + " XP). Thesis steps: " + steps + "." +
+    "<div class='rh'>STREAK</div>Current " + (auth.state.streak||"0") + " - best " + (auth.state.best_streak||"0") + "." +
+    "<div class='rh'>NEXT</div>" + need + " XP to Level " + (parseInt(auth.state.level||"1",10)+1) + "." +
+    "<div class='rh'>VERDICT</div><span class='dim'>" + verdict + "</span>");
 });
 document.getElementById("mClose").addEventListener("click", function(){ modal.classList.remove("show"); });
 modal.addEventListener("click", function(e){ if(e.target === modal) modal.classList.remove("show"); });
@@ -933,6 +985,74 @@ function completeQuest(part){
     });
 }
 
+/* in-app PENALTY: parts come from the public scaffold (penalty_date, penalty_parts) or the default
+   Lv1-3 set; each part taps to a private append-only row pen:DATE:part=yes; a thesis carry-over is
+   satisfied by any THESIS completion on or after the penalty date. When all parts are done the app
+   records pen:DATE:complete=yes; the System clears the public flag at its next review. */
+function penaltyInfo(){
+  if(!cur || !yes(cur.penalty_pending)) return null;
+  var pd = cur.penalty_date || cur.date;
+  if(!pd) return null;
+  var lvl = auth.ready && auth.state ? parseInt(auth.state.level || "1", 10) : 1;
+  var big = lvl > 3;
+  var labels = {squats: big ? "50 extra squats" : "30 extra squats",
+                "wall-sit": big ? "5 minutes of wall-sit (total)" : "2 minutes of wall-sit (total)",
+                thesis: "Finish the carried-over thesis step"};
+  var parts = String(cur.penalty_parts || "squats,wall-sit").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+  return {date: pd, parts: parts, labels: labels};
+}
+function penKey(pd, p){ return "pen:" + pd + ":" + p; }
+function penPartDone(pd, p){
+  if(!auth.raw) return false;
+  if(p === "thesis"){
+    var done = false;
+    Object.keys(auth.raw).forEach(function(k){
+      var m = k.match(/^day:(\d{4}-\d{2}-\d{2}):thesis$/);
+      if(m && m[1] >= pd && yes(auth.raw[k])) done = true;
+    });
+    return done;
+  }
+  return yes(auth.raw[penKey(pd, p)]);
+}
+function renderPenalty(){
+  var wrap = document.getElementById("penparts");
+  if(!wrap) return;
+  wrap.innerHTML = "";
+  var info = penaltyInfo();
+  if(!info) return;
+  if(!auth.ready){
+    setText("penbody", "The penalty directive is active. Sign in to record its parts. No XP is lost - but the System does not forget.");
+    return;
+  }
+  var done = 0;
+  info.parts.forEach(function(p){
+    var d = penPartDone(info.date, p);
+    if(d) done++;
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "penrow" + (d ? " done" : "") + (p === "thesis" ? " info" : "");
+    b.innerHTML = "<span class='pbox'></span><span>" + (info.labels[p] || p) + (p === "thesis" ? " - completed through the THESIS quest" : "") + "</span>";
+    if(p !== "thesis" && !d){
+      b.addEventListener("click", function(){
+        var k = penKey(info.date, p);
+        auth.raw[k] = "yes";
+        renderPenalty();
+        appendRows([[k, "yes"]]).catch(function(){ auth.err = true; render(cur); });
+      });
+    }
+    wrap.appendChild(b);
+  });
+  if(info.parts.length && done === info.parts.length){
+    if(!yes(auth.raw[penKey(info.date, "complete")])){
+      auth.raw[penKey(info.date, "complete")] = "yes";
+      appendRows([[penKey(info.date, "complete"), "yes"]]).catch(function(){ auth.err = true; });
+    }
+    setText("penbody", "PENALTY CLEARED. No XP was lost. The System does not forget - it does not need to.");
+  } else {
+    setText("penbody", "The penalty directive is active. Tap each part when done. No XP is lost - but the System does not forget.");
+  }
+}
+
 /* private vocabulary deck (his own PDF set) - never in the public repo */
 var DECK = [
   {en:"T-shirt", fr:["le tee-shirt"], ar:["قميص قصير الكُمَّين"]},
@@ -1097,6 +1217,7 @@ render = function(s){
   else if(auth.pending){ b.textContent = "..."; }
   else if(auth.err){ b.textContent = "RETRY"; b.classList.add("autherr"); b.classList.remove("signed"); }
   else { b.textContent = "SIGN IN"; b.classList.remove("signed","autherr"); }
+  renderPenalty();
 };
 
 function showLevelUp(note){
@@ -1151,7 +1272,7 @@ function openMindFlow(){
     if(!memStudied()){
       var cards = memCards();
       setText("memTitle","STUDY - 10 FLASHCARDS");
-      setText("memNote","Memorize all 10. They disappear until the 21:30 recall test.");
+      setText("memNote", memTestTime() ? "Memorize all 10, then mark them studied - the recall test is already open." : "Memorize all 10. They disappear until the 21:30 recall test.");
       itemEl.innerHTML = cards.map(function(c, i){
         return "<div style='margin:6px 0'><b>" + (i+1) + ". " + c.en + "</b> = " + c.fr[0] + " / " + c.ar[0] + "</div>";
       }).join("");
@@ -1165,7 +1286,7 @@ function openMindFlow(){
       };
     } else {
       setText("memTitle","STUDIED");
-      setText("memNote","The cards are hidden now. Recall test at 21:30.");
+      setText("memNote", memTestTime() ? "The cards are hidden now. Tap MIND again for the recall test." : "The cards are hidden now. Recall test at 21:30.");
       btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
     }
   } else {
@@ -1280,9 +1401,10 @@ function openItemMindFlow(type, ov, inp, btn, itemEl){
   }
   if(!memTestTime() || !mindStudiedToday()){ /* fair study-before-recall: late study stays open until first studied */
     if(!mindStudiedToday()){
-      var notes = {number:"Memorize the number, digit for digit. It disappears until the 21:30 recall test.",
-                   words:"Memorize all 10 words IN ORDER. They disappear until the 21:30 recall test.",
-                   quote:"Memorize the quote word for word. It disappears until the 21:30 recall test."};
+      var late = memTestTime();
+      var notes = {number: late ? "Memorize the number, digit for digit, then mark it studied - the recall test is already open." : "Memorize the number, digit for digit. It disappears until the 21:30 recall test.",
+                   words: late ? "Memorize all 10 words IN ORDER, then mark them studied - the recall test is already open." : "Memorize all 10 words IN ORDER. They disappear until the 21:30 recall test.",
+                   quote: late ? "Memorize the quote word for word, then mark it studied - the recall test is already open." : "Memorize the quote word for word. It disappears until the 21:30 recall test."};
       setText("memTitle","STUDY - " + type.toUpperCase());
       setText("memNote", notes[type]);
       itemEl.innerHTML = itemHtml(type, item);
@@ -1296,7 +1418,7 @@ function openItemMindFlow(type, ov, inp, btn, itemEl){
       };
     } else {
       setText("memTitle","STUDIED");
-      setText("memNote","The item is hidden now. Recall test at 21:30.");
+      setText("memNote", memTestTime() ? "The item is hidden now. Tap MIND again for the recall test." : "The item is hidden now. Recall test at 21:30.");
       btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
     }
     return;
