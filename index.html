@@ -270,7 +270,7 @@ body{
 
   <div class="card pen rise" id="penalty" style="display:none">
     <div class="chead"><span class="pip"></span><h2>PENALTY QUEST: SURVIVAL</h2><div class="ln"></div></div>
-    <div class="cbody">The penalty directive is active. Report completion in chat. No XP is lost - but the System does not forget.</div>
+    <div class="cbody">The penalty directive is active. No XP is lost - but the System does not forget.</div>
   </div>
 
   <div class="card rise2">
@@ -614,17 +614,17 @@ document.getElementById("rulesbtn").addEventListener("click", function(){
   openModal("[ SYSTEM GUIDE ]",
     "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, THESIS. At 21:30 the System checks what remains." +
     "<div class='rh'>BODY - STR</div>Daily training, no equipment: push-ups, squats, sit-ups, plank. Current targets: 5 push-ups (knees allowed), 10 squats, 5 sit-ups, 20-second plank. Targets stay fixed - they rise gradually only when they feel comfortable with good form, never automatically with level-ups. Never push through pain." +
-    "<div class='rh'>MIND - MEM</div>Memory training rotates daily: numbers, words in order, interpreting flashcards, quotes. The item is given in chat each morning. The scheduled test is at 21:30, without looking; an early exact answer also counts when the System accepts it. Only exact recall earns MEM." +
+    "<div class='rh'>MIND - MEM</div>Memory training rotates daily: numbers, words in order, interpreting flashcards, quotes. The day's item waits in the app - tap MIND to study. Study stays open until you mark it studied; the recall test runs from 21:30, blind and exact. Only exact recall earns MEM." +
     "<div class='rh'>THESIS - INT</div>One concrete 45-minute step per day, in order: coding, analysis chapter, theory chapters, introduction and conclusion. A finished step never repeats." +
     "<div class='rh'>REWARDS</div>BODY +30 XP, STR +1. MIND +30 XP, MEM +1 on exact recall only. THESIS +40 XP, INT +1. All three in one day: +20 bonus XP, streak +1." +
     "<div class='rh'>LEVELS</div>XP fills the bar; when it is full, you level up and surplus XP carries over. The next level costs 100 + 20 x current level XP: 120, then 140, then 160. Workout targets stay fixed at every level; they rise only when the current ones feel comfortable with good form." +
     "<div class='rh'>STATS</div>STR counts completed BODY quests. MEM counts passed memory tests. INT counts completed thesis steps. Records of wins, started at zero." +
     "<div class='rh'>RANKS</div>E at Levels 1-9, D 10-19, C 20-34, B 35-49, A 50-69, S 70+. Tap the emblem for the full path and titles." +
     "<div class='rh'>STREAK</div>Consecutive days with all three parts complete. BEST keeps the longest run." +
-    "<div class='rh'>NIGHT CHECK</div>At 21:30 the System warns about unfinished parts and runs the scheduled memory test in chat." +
+    "<div class='rh'>NIGHT CHECK</div>At 21:30 the memory recall test opens in the app, and the System checks what remains unfinished." +
     "<div class='rh'>PENALTY</div>Any part unfinished at 23:59: the streak resets to zero, XP is kept. Next morning opens a Penalty Quest: 30 extra squats and 2 minutes of wall-sit at Levels 1-3 (50 squats, 5 minutes above), plus the unfinished thesis step." +
     "<div class='rh'>WEEKLY REPORT</div>Every Sunday at 20:00 the System delivers a weekly Status Window in chat: gains, days cleared, thesis steps, next milestone." +
-    "<div class='rh'>APP AND CHAT</div><span class='dim'>This app shows progress and rules. Chat is where quests are reported, memory is tested and help is given. Checkmarks here alone award nothing - the System confirms completion in chat. Failure will result in a penalty.</span>");
+    "<div class='rh'>THE APP</div><span class='dim'>The whole System lives in this app: quests, study material, recall tests, check-offs and progress. Tap a part when done - private sync records it at once. Only exact recall earns MEM. Failure will result in a penalty.</span>");
 });
 document.getElementById("mClose").addEventListener("click", function(){ modal.classList.remove("show"); });
 modal.addEventListener("click", function(e){ if(e.target === modal) modal.classList.remove("show"); });
@@ -1075,12 +1075,13 @@ render = function(s){
     if(!tfm.mind){
       var mtype = mindTypeToday();
       if(mtype !== "flashcards"){
-        qsm.textContent = memTestTime() ? "[RECALL TEST - TAP TO ANSWER]"
-          : (mindStudiedToday() ? "[STUDIED - RECALL AT 21:30]" : "[TAP TO STUDY TODAY'S ITEM]");
+        qsm.textContent = mindStudiedToday()
+          ? (memTestTime() ? "[RECALL TEST - TAP TO ANSWER]" : "[STUDIED - RECALL AT 21:30]")
+          : "[TAP TO STUDY TODAY'S ITEM]";
       } else {
-        qsm.textContent = memTestTime()
-          ? "[RECALL TEST " + memMasteredCount() + "/10 - TAP TO ANSWER]"
-          : (memStudied() ? "[STUDIED - RECALL AT 21:30]" : "[TAP TO STUDY 10 FLASHCARDS]");
+        qsm.textContent = memStudied()
+          ? (memTestTime() ? "[RECALL TEST " + memMasteredCount() + "/10 - TAP TO ANSWER]" : "[STUDIED - RECALL AT 21:30]")
+          : "[TAP TO STUDY 10 FLASHCARDS]";
       }
     }
     }
@@ -1146,7 +1147,7 @@ function openMindFlow(){
     btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
   } else if(mtype !== "flashcards"){
     openItemMindFlow(mtype, ov, inp, btn, itemEl);
-  } else if(!memTestTime()){
+  } else if(!memTestTime() || !memStudied()){ /* late study stays open until first studied */
     if(!memStudied()){
       var cards = memCards();
       setText("memTitle","STUDY - 10 FLASHCARDS");
@@ -1277,7 +1278,7 @@ function openItemMindFlow(type, ov, inp, btn, itemEl){
     btn.textContent = "CLOSE"; btn.onclick = function(){ ov.classList.remove("show"); };
     return;
   }
-  if(!memTestTime()){
+  if(!memTestTime() || !mindStudiedToday()){ /* fair study-before-recall: late study stays open until first studied */
     if(!mindStudiedToday()){
       var notes = {number:"Memorize the number, digit for digit. It disappears until the 21:30 recall test.",
                    words:"Memorize all 10 words IN ORDER. They disappear until the 21:30 recall test.",
@@ -1300,7 +1301,7 @@ function openItemMindFlow(type, ov, inp, btn, itemEl){
     }
     return;
   }
-  /* no late reveal: the item was shown in the study window only; un-studied means an honest miss */
+  /* recall stays blind with the item hidden; study is always available before the first recall */
   setText("memTitle","RECALL TEST - 21:30");
   var prompts = {number:"Type the number exactly.", words:"Type all 10 words in order.", quote:"Type the quote exactly."};
   setText("memNote", prompts[type] + " The item stays hidden." + (mindStudiedToday() ? "" : " No study was recorded today."));
