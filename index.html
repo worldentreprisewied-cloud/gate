@@ -650,16 +650,25 @@ document.getElementById("matbtn").addEventListener("click", function(){
   mats.forEach(function(m){
     html += "<div style='margin:10px 0'><a href='" + String(m.url).replace(/'/g, "%27") + "' target='_blank' rel='noopener'>" + m.label + "</a></div>";
   });
-  html += "<span class='dim'>Materials open in your own Google account. Nothing here is public.</span>";
+  var missing = [];
+  try { missing = JSON.parse(auth.raw["thesis:materials:missing"] || "[]"); } catch(e){}
+  if(missing.length){
+    html += "<div class='rh' style='color:var(--red)'>MISSING</div>" +
+      "<span class='dim'>The System does not hold these originals: " + missing.join(", ") +
+      ". Drop them into the thesis folder above from your own files - the System links them here at its next review.</span>";
+  }
+  html += "<div style='margin-top:10px'><span class='dim'>Materials open in your own Google account. Nothing here is public.</span></div>";
   openModal("[ MATERIALS ]", html);
 });
 document.getElementById("weeklybtn").addEventListener("click", function(){
   if(!auth.ready || !auth.raw){ openModal("[ WEEKLY STATUS WINDOW ]", "<span class='dim'>Sign in to open the weekly Status Window.</span>"); return; }
   var today = deviceDate();
-  var cleared = 0, xp = 0, steps = 0, parts = 0;
+  var cleared = 0, xp = 0, steps = 0, parts = 0, rests = 0, active = 0;
   for(var i = 6; i >= 0; i--){
     var d = addDays(today, -i);
     if(d <= (auth.raw.base_date || "")) continue;
+    if(yes(auth.raw[dayKey(d,"rest")])){ rests++; continue; }
+    active++;
     var b = yes(auth.raw[dayKey(d,"body")]), m = yes(auth.raw[dayKey(d,"mind")]), t = yes(auth.raw[dayKey(d,"thesis")]);
     if(b){ xp += 30; parts++; }
     if(m){ xp += 30; parts++; }
@@ -670,9 +679,11 @@ document.getElementById("weeklybtn").addEventListener("click", function(){
   var verdict = cleared >= 6 ? "The System acknowledges your consistency."
               : cleared >= 4 ? "A solid week. The System expects more."
               : cleared >= 1 ? "Days were cleared. Consistency is the next test."
+              : active === 0 ? "Rest only this window. The System waits."
               : "No day cleared this window. The System does not forget.";
   openModal("[ WEEKLY STATUS WINDOW ]",
-    "<div class='rh'>LAST 7 DAYS</div>Days fully cleared: " + cleared + " / 7" +
+    "<div class='rh'>LAST 7 DAYS</div>Days fully cleared: " + cleared + " / " + active + " active" +
+    (rests ? " <span class='dim'>(" + rests + " rest day" + (rests > 1 ? "s" : "") + " excused - no failure)</span>" : "") +
     "<div class='rh'>GAINS</div>Quest parts cleared: " + parts + " (+" + xp + " XP). Thesis steps: " + steps + "." +
     "<div class='rh'>STREAK</div>Current " + (auth.state.streak||"0") + " - best " + (auth.state.best_streak||"0") + "." +
     "<div class='rh'>NEXT</div>" + need + " XP to Level " + (parseInt(auth.state.level||"1",10)+1) + "." +
