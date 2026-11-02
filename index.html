@@ -500,8 +500,9 @@ function renderTimer(){
   var left = [];
   if(!yes(cur.body_done)) left.push("BODY");
   if(!yes(cur.mind_done)) left.push("MIND");
-  if(!yes(cur.thesis_done)) left.push("THESIS");
-  setText("trem", left.length === 0 ? "ALL PARTS COMPLETE" : ("REMAINING: " + left.join(" - ")));
+  var tBlocked = (typeof thesisBlocked === "function") && thesisBlocked();
+  if(!yes(cur.thesis_done) && !tBlocked) left.push("THESIS");
+  setText("trem", left.length === 0 ? (tBlocked && !yes(cur.thesis_done) ? "AWAITING THESIS MATERIALS - NO FAILURE" : "ALL PARTS COMPLETE") : ("REMAINING: " + left.join(" - ")));
 }
 
 function statWidth(v){
@@ -538,6 +539,8 @@ function render(s){
     var qs = document.getElementById(p[1]);
     el.classList.remove("done","reported");
     if(s.event === "rest"){ qs.textContent = "[REST DAY]"; return; }
+    qs.style.color = "";
+    if(p[0] === "q-thesis" && (typeof thesisBlocked === "function") && thesisBlocked()){ qs.textContent = "[BLOCKED - MATERIALS MISSING]"; qs.style.color = "var(--amber)"; return; }
     if(yes(p[2])){
       el.classList.add("done");
       qs.textContent = "[COMPLETE] " + p[4] + " - TAP FOR DETAILS";
@@ -590,6 +593,7 @@ function loadState(){
 [["q-body","body"],["q-mind","mind"],["q-thesis","thesis"]].forEach(function(p){
   document.getElementById(p[0]).addEventListener("click", function(){
     if(!cur.date) return;
+    if(p[1] === "thesis" && (typeof thesisBlocked === "function") && thesisBlocked()) return;
     var doneKey = p[1] + "_done";
     if(yes(cur[doneKey])){ this.classList.toggle("expanded"); return; }
     var r = getReported(cur.date);
@@ -1000,6 +1004,14 @@ function completeQuest(part){
    Lv1-3 set; each part taps to a private append-only row pen:DATE:part=yes; a thesis carry-over is
    satisfied by any THESIS completion on or after the penalty date. When all parts are done the app
    records pen:DATE:complete=yes; the System clears the public flag at its next review. */
+/* THESIS blocked while the originals for the current step are missing: no completion, no pressure */
+function thesisBlocked(){
+  if(!auth.ready || !auth.raw || !cur || !cur.date) return false;
+  var missing = [];
+  try { missing = JSON.parse(auth.raw["thesis:materials:missing"] || "[]"); } catch(e){}
+  return missing.length > 0 && !yes(auth.raw[dayKey(cur.date, "thesis")]);
+}
+
 function penaltyInfo(){
   if(!cur || !yes(cur.penalty_pending)) return null;
   var pd = cur.penalty_date || cur.date;
@@ -1249,6 +1261,10 @@ function showLevelUp(note){
     if(tf[p[1]]) return; // already complete: first listener toggled expansion
     e.stopPropagation();
     if(!dayOpen()){ showClosed(); return; }
+    if(p[1] === "thesis" && thesisBlocked()){
+      openModal("[ THESIS BLOCKED ]", "<span class='dim'>The originals for this step are missing - the System does not hold them. Open MATERIALS for what to restore. This part does not count against you while they are gone.</span>");
+      return;
+    }
     if(p[1] === "mind"){ openMindFlow(); return; } // flashcard study/recall flow
     var beforeLvl = parseInt(auth.state.level, 10);
     var r = getReported(cur.date); r[p[1]] = true; setReported(r);
@@ -1501,4 +1517,5 @@ if("serviceWorker" in navigator){
 </script>
 </body>
 </html>
+
 
