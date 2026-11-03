@@ -144,7 +144,7 @@ body{
   box-shadow:0 6px 22px rgba(0,0,0,.4)}
 .qrow .accent{flex:0 0 4px;border-radius:16px 0 0 16px;background:var(--cy);box-shadow:0 0 10px var(--cy)}
 .qrow#q-mind .accent{background:var(--vio);box-shadow:0 0 10px var(--vio)}
-.qrow#q-thesis .accent{background:var(--grn);box-shadow:0 0 10px var(--grn)}
+.qrow#q-french .accent{background:var(--grn);box-shadow:0 0 10px var(--grn)}
 .qrow .qin{flex:1;display:flex;gap:14px;align-items:center;padding:16px 16px 16px 14px;min-height:78px}
 .qrow:active{background:rgba(50,105,185,.45)}
 .qbox{flex:0 0 auto;width:28px;height:28px;border-radius:50%;padding:2px;
@@ -235,7 +235,7 @@ body{
 .penrow.info .pbox{border-color:rgba(255,220,150,.6)}
 .penrow.info.done .pbox{background:rgba(255,200,120,.3)}
 .tbtns{flex-wrap:wrap;justify-content:flex-end}
-#weeklybtn,#matbtn{padding:8px 10px;font-size:10px;letter-spacing:.12em;text-indent:.12em;min-height:36px}
+#weeklybtn{padding:8px 10px;font-size:10px;letter-spacing:.12em;text-indent:.12em;min-height:36px}
 .mbody a{color:#9fe4ff;text-decoration:none;border-bottom:1px solid rgba(159,228,255,.4)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 
@@ -271,7 +271,6 @@ body{
           <button class="tbtn" id="authbtn" type="button">SIGN IN</button>
           <button class="tbtn" id="rulesbtn" type="button">RULES</button>
           <button class="tbtn" id="weeklybtn" type="button">WEEKLY</button>
-          <button class="tbtn" id="matbtn" type="button">MATERIALS</button>
           <button class="tbtn" id="syncbtn" type="button">SYNC</button>
         </div>
       </div>
@@ -369,14 +368,14 @@ body{
           </div>
         </div>
       </button>
-      <button class="qrow" id="q-thesis" type="button">
+      <button class="qrow" id="q-french" type="button">
         <span class="accent"></span>
         <div class="qin">
           <div class="qbox"><i></i></div>
           <div class="qt">
-            <div class="qn">THESIS</div>
-            <div class="qd" id="qd-thesis">-</div>
-            <div class="qs" id="qs-thesis">+40 XP - INT +1</div>
+            <div class="qn">FRENCH</div>
+            <div class="qd" id="qd-french">-</div>
+            <div class="qs" id="qs-french">+40 XP - INT +1</div>
           </div>
         </div>
       </button>
@@ -424,7 +423,7 @@ var RANKS = [
 var STAT_INFO = {
   str: {h:"[ STR - STRENGTH ]", b:"The body. Grows with each completed BODY quest: push-ups, squats, sit-ups, plank.<span class='dim'>+1 STR per completed BODY quest. Knee push-ups allowed.</span>"},
   mem: {h:"[ MEM - MEMORY ]", b:"The mind. Grows with each completed MIND quest. A new memory task every day; recall is tested at 21:30.<span class='dim'>+1 MEM only on exact recall at the evening test.</span>"},
-  int: {h:"[ INT - INTELLIGENCE ]", b:"The thesis. Grows with each completed THESIS quest: one concrete 45-minute step on the Master's thesis.<span class='dim'>+1 INT per completed THESIS quest. Highest XP reward of the three.</span>"}
+  int: {h:"[ INT - INTELLIGENCE ]", b:"Knowledge work. Grows with each completed FRENCH challenge - and kept every INT earned from THESIS steps before THESIS was retired on 2026-11-03.<span class='dim'>+1 INT per completed FRENCH challenge.</span>"}
 };
 
 var cur = {date:"", level:"1"};
@@ -500,9 +499,8 @@ function renderTimer(){
   var left = [];
   if(!yes(cur.body_done)) left.push("BODY");
   if(!yes(cur.mind_done)) left.push("MIND");
-  var tBlocked = (typeof thesisBlocked === "function") && thesisBlocked();
-  if(!yes(cur.thesis_done) && !tBlocked) left.push("THESIS");
-  setText("trem", left.length === 0 ? (tBlocked && !yes(cur.thesis_done) ? "AWAITING THESIS MATERIALS - NO FAILURE" : "ALL PARTS COMPLETE") : ("REMAINING: " + left.join(" - ")));
+  if(!yes(cur.french_done)) left.push("FRENCH");
+  setText("trem", left.length === 0 ? "ALL PARTS COMPLETE" : ("REMAINING: " + left.join(" - ")));
 }
 
 function statWidth(v){
@@ -529,18 +527,17 @@ function render(s){
   setText("questHead", "DAILY QUEST" + (s.date ? " - " + s.date : ""));
   setText("qd-body", s.quest_body || "-");
   setText("qd-mind", s.quest_mind || "-");
-  setText("qd-thesis", s.quest_thesis || "-");
+  setText("qd-french", s.quest_french || "-");
 
   var rep = getReported(s.date || "");
   [["q-body","qs-body", s.body_done, rep.body, "+30 XP - STR +1"],
    ["q-mind","qs-mind", s.mind_done, rep.mind, "+30 XP - MEM +1"],
-   ["q-thesis","qs-thesis", s.thesis_done, rep.thesis, "+40 XP - INT +1"]].forEach(function(p){
+   ["q-french","qs-french", s.french_done, rep.french, "+40 XP - INT +1"]].forEach(function(p){
     var el = document.getElementById(p[0]);
     var qs = document.getElementById(p[1]);
     el.classList.remove("done","reported");
     if(s.event === "rest"){ qs.textContent = "[REST DAY]"; return; }
     qs.style.color = "";
-    if(p[0] === "q-thesis" && (typeof thesisBlocked === "function") && thesisBlocked()){ qs.textContent = "[BLOCKED - MATERIALS MISSING]"; qs.style.color = "var(--amber)"; return; }
     if(yes(p[2])){
       el.classList.add("done");
       qs.textContent = "[COMPLETE] " + p[4] + " - TAP FOR DETAILS";
@@ -590,12 +587,11 @@ function loadState(){
 }
 
 /* quest tap = local "reported" marker; the System's sheet stays the truth */
-[["q-body","body"],["q-mind","mind"],["q-thesis","thesis"]].forEach(function(p){
+[["q-body","body"],["q-mind","mind"],["q-french","french"]].forEach(function(p){
   document.getElementById(p[0]).addEventListener("click", function(){
     if(!cur.date) return;
-    if(p[1] === "thesis" && (typeof thesisBlocked === "function") && thesisBlocked()) return;
     var doneKey = p[1] + "_done";
-    if(yes(cur[doneKey])){ this.classList.toggle("expanded"); return; }
+    if(yes(cur[doneKey])){ if(p[1] === "french"){ openFrenchModel(); return; } this.classList.toggle("expanded"); return; }
     var r = getReported(cur.date);
     r[p[1]] = !r[p[1]];
     setReported(r);
@@ -631,38 +627,19 @@ document.getElementById("rankbtn").addEventListener("click", function(){
 });
 document.getElementById("rulesbtn").addEventListener("click", function(){
   openModal("[ SYSTEM GUIDE ]",
-    "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, THESIS. At 21:30 the System checks what remains." +
+    "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, FRENCH. At 21:30 the System checks what remains." +
     "<div class='rh'>BODY - STR</div>Daily training, no equipment: push-ups, squats, sit-ups, plank. Current targets: 5 push-ups (knees allowed), 10 squats, 5 sit-ups, 20-second plank. Targets stay fixed - they rise gradually only when they feel comfortable with good form, never automatically with level-ups. Never push through pain." +
     "<div class='rh'>MIND - MEM</div>Memory training rotates daily: numbers, words in order, interpreting flashcards, quotes. The day's item waits in the app - tap MIND to study. Study stays open until you mark it studied; the recall test runs from 21:30, blind and exact. Only exact recall earns MEM." +
-    "<div class='rh'>THESIS - INT</div>One concrete 45-minute step per day, in order: coding, analysis chapter, theory chapters, introduction and conclusion. A finished step never repeats." +
-    "<div class='rh'>REWARDS</div>BODY +30 XP, STR +1. MIND +30 XP, MEM +1 on exact recall only. THESIS +40 XP, INT +1. All three in one day: +20 bonus XP, streak +1." +
+    "<div class='rh'>FRENCH - INT</div>One short practical French challenge per day: real phrases for work, admin and everyday life. Write it or say it out loud, then tap when done - the System's model answer appears after, inside the app. Self-reported like BODY: the System does not grade your French, the model teaches. THESIS was retired from GATE on 2026-11-03 at your request; its XP and INT stay earned." +
+    "<div class='rh'>REWARDS</div>BODY +30 XP, STR +1. MIND +30 XP, MEM +1 on exact recall only. FRENCH +40 XP, INT +1. All three in one day: +20 bonus XP, streak +1." +
     "<div class='rh'>LEVELS</div>XP fills the bar; when it is full, you level up and surplus XP carries over. The next level costs 100 + 20 x current level XP: 120, then 140, then 160. Workout targets stay fixed at every level; they rise only when the current ones feel comfortable with good form." +
-    "<div class='rh'>STATS</div>STR counts completed BODY quests. MEM counts passed memory tests. INT counts completed thesis steps. Records of wins, started at zero." +
+    "<div class='rh'>STATS</div>STR counts completed BODY quests. MEM counts passed memory tests. INT counts completed knowledge work: FRENCH challenges now, THESIS steps before. Records of wins, started at zero." +
     "<div class='rh'>RANKS</div>E at Levels 1-9, D 10-19, C 20-34, B 35-49, A 50-69, S 70+. Tap the emblem for the full path and titles." +
     "<div class='rh'>STREAK</div>Consecutive days with all three parts complete. BEST keeps the longest run." +
     "<div class='rh'>NIGHT CHECK</div>At 21:30 the memory recall test opens in the app, and the System checks what remains unfinished." +
-    "<div class='rh'>PENALTY</div>Any part unfinished at 23:59: the streak resets to zero, XP is kept. Next morning opens a Penalty Quest: 30 extra squats and 2 minutes of wall-sit at Levels 1-3 (50 squats, 5 minutes above), plus the unfinished thesis step. The penalty is completed in this app - tap each part as you finish it." +
+    "<div class='rh'>PENALTY</div>Any part unfinished at 23:59: the streak resets to zero, XP is kept. Next morning opens a Penalty Quest: 30 extra squats and 2 minutes of wall-sit at Levels 1-3 (50 squats, 5 minutes above). The penalty is completed in this app - tap each part as you finish it." +
     "<div class='rh'>WEEKLY REPORT</div>The weekly Status Window lives in this app - tap WEEKLY: days cleared, gains, thesis steps, streak, next milestone." +
-    "<div class='rh'>THE APP</div><span class='dim'>The whole System lives in this app: quests, study material, recall tests, check-offs, thesis materials and progress. Tap a part when done - private sync records it at once. Only exact recall earns MEM. Failure will result in a penalty.</span>");
-});
-document.getElementById("matbtn").addEventListener("click", function(){
-  if(!auth.ready || !auth.raw){ openModal("[ MATERIALS ]", "<span class='dim'>Sign in to open your materials - private sync keeps them yours.</span>"); return; }
-  var mats = [];
-  try { mats = JSON.parse(auth.raw["thesis:materials"] || "[]"); } catch(e){}
-  var html = "<div class='rh'>THESIS</div>";
-  if(!mats.length){ html += "<span class='dim'>No thesis materials synced yet.</span>"; }
-  mats.forEach(function(m){
-    html += "<div style='margin:10px 0'><a href='" + String(m.url).replace(/'/g, "%27") + "' target='_blank' rel='noopener'>" + m.label + "</a></div>";
-  });
-  var missing = [];
-  try { missing = JSON.parse(auth.raw["thesis:materials:missing"] || "[]"); } catch(e){}
-  if(missing.length){
-    html += "<div class='rh' style='color:var(--red)'>MISSING</div>" +
-      "<span class='dim'>The System does not hold these originals: " + missing.join(", ") +
-      ". Drop them into the thesis folder above from your own files - the System links them here at its next review.</span>";
-  }
-  html += "<div style='margin-top:10px'><span class='dim'>Materials open in your own Google account. Nothing here is public.</span></div>";
-  openModal("[ MATERIALS ]", html);
+    "<div class='rh'>THE APP</div><span class='dim'>The whole System lives in this app: quests, study material, recall tests, model answers, check-offs and progress. Tap a part when done - private sync records it at once. Only exact recall earns MEM. Failure will result in a penalty.</span>");
 });
 document.getElementById("weeklybtn").addEventListener("click", function(){
   if(!auth.ready || !auth.raw){ openModal("[ WEEKLY STATUS WINDOW ]", "<span class='dim'>Sign in to open the weekly Status Window.</span>"); return; }
@@ -673,11 +650,13 @@ document.getElementById("weeklybtn").addEventListener("click", function(){
     if(d <= (auth.raw.base_date || "")) continue;
     if(yes(auth.raw[dayKey(d,"rest")])){ rests++; continue; }
     active++;
-    var b = yes(auth.raw[dayKey(d,"body")]), m = yes(auth.raw[dayKey(d,"mind")]), t = yes(auth.raw[dayKey(d,"thesis")]);
+    var b = yes(auth.raw[dayKey(d,"body")]), m = yes(auth.raw[dayKey(d,"mind")]);
+    var t = yes(auth.raw[dayKey(d,"thesis")]), f = yes(auth.raw[dayKey(d,"french")]);
     if(b){ xp += 30; parts++; }
     if(m){ xp += 30; parts++; }
-    if(t){ xp += 40; parts++; steps++; }
-    if(b && m && t){ xp += 20; cleared++; }
+    if(t || f){ xp += 40; parts++; steps++; }
+    var clearedDay = (d < THESIS_RETIRED_ON) ? (b && m && t) : (b && m && f);
+    if(clearedDay){ xp += 20; cleared++; }
   }
   var need = Math.max(0, parseInt(auth.state.xp_needed||"120",10) - parseInt(auth.state.xp||"0",10));
   var verdict = cleared >= 6 ? "The System acknowledges your consistency."
@@ -688,7 +667,7 @@ document.getElementById("weeklybtn").addEventListener("click", function(){
   openModal("[ WEEKLY STATUS WINDOW ]",
     "<div class='rh'>LAST 7 DAYS</div>Days fully cleared: " + cleared + " / " + active + " active" +
     (rests ? " <span class='dim'>(" + rests + " rest day" + (rests > 1 ? "s" : "") + " excused - no failure)</span>" : "") +
-    "<div class='rh'>GAINS</div>Quest parts cleared: " + parts + " (+" + xp + " XP). Thesis steps: " + steps + "." +
+    "<div class='rh'>GAINS</div>Quest parts cleared: " + parts + " (+" + xp + " XP). Knowledge steps (thesis/french): " + steps + "." +
     "<div class='rh'>STREAK</div>Current " + (auth.state.streak||"0") + " - best " + (auth.state.best_streak||"0") + "." +
     "<div class='rh'>NEXT</div>" + need + " XP to Level " + (parseInt(auth.state.level||"1",10)+1) + "." +
     "<div class='rh'>VERDICT</div><span class='dim'>" + verdict + "</span>");
@@ -932,6 +911,7 @@ function rankFor(L){
 function dayKey(d, p){ return "day:" + d + ":" + p; }
 function memCardsKey(d){ return "mem:" + d + ":cards"; }
 function memStudiedKey(d){ return "mem:" + d + ":studied"; }
+var THESIS_RETIRED_ON = "2026-11-03";
 function memMarkKey(d, i, lang){ return "mem:" + d + ":m:" + i + ":" + lang; }
 function addDays(d, n){ var t = new Date(d + "T12:00:00"); t.setDate(t.getDate() + n); return t.toISOString().slice(0,10); }
 
@@ -942,7 +922,7 @@ function derive(raw, today){
   var baseDate = raw.base_date || "";
   var days = {};
   Object.keys(raw).forEach(function(k){
-    var m = k.match(/^day:(\d{4}-\d{2}-\d{2}):(body|mind|thesis)$/);
+    var m = k.match(/^day:(\d{4}-\d{2}-\d{2}):(body|mind|thesis|french)$/);
     if(m && yes(raw[k]) && m[1] > baseDate){ (days[m[1]] = days[m[1]] || {})[m[2]] = true; }
   });
   var rests = {};
@@ -963,7 +943,11 @@ function derive(raw, today){
     if(f.body){ str += 1; xp += 30; }
     if(f.mind){ mem += 1; xp += 30; }
     if(f.thesis){ intel += 1; xp += 40; }
-    if(f.body && f.mind && f.thesis){
+    if(f.french){ intel += 1; xp += 40; }
+    /* history grandfathered: days before THESIS_RETIRED_ON clear on body+mind+thesis;
+       from that date (user retired THESIS, FRENCH replaced it) on body+mind+french */
+    var clearedDay = (d < THESIS_RETIRED_ON) ? (f.body && f.mind && f.thesis) : (f.body && f.mind && f.french);
+    if(clearedDay){
       run = (prevAll && (addDays(prevAll,1) === d || (addDays(prevAll,1) < d && gapAllRest(prevAll, d)))) ? run + 1 : 1;
       if(run > best) best = run;
       prevAll = d;
@@ -981,11 +965,11 @@ function derive(raw, today){
 
 function todayFlags(){
   var d = (cur && cur.date) || "";
-  if(!auth.raw || !d) return {body:false, mind:false, thesis:false};
+  if(!auth.raw || !d) return {body:false, mind:false, french:false};
   if(d <= (auth.raw.base_date || "")) {
-    return {body: yes(auth.raw.base_body_done), mind: yes(auth.raw.base_mind_done), thesis: yes(auth.raw.base_thesis_done)};
+    return {body: yes(auth.raw.base_body_done), mind: yes(auth.raw.base_mind_done), french: yes(auth.raw.base_french_done)};
   }
-  return {body: yes(auth.raw[dayKey(d,"body")]), mind: yes(auth.raw[dayKey(d,"mind")]), thesis: yes(auth.raw[dayKey(d,"thesis")])};
+  return {body: yes(auth.raw[dayKey(d,"body")]), mind: yes(auth.raw[dayKey(d,"mind")]), french: yes(auth.raw[dayKey(d,"french")])};
 }
 
 function appendRows(rows){
@@ -1006,36 +990,18 @@ function completeQuest(part){
   var k = dayKey(d, part);
   if(yes(auth.raw[k])) return Promise.resolve(false);
   auth.raw[k] = "yes";
-  /* thesis: last_thesis_step means COMPLETED step - advance it here, on completion only */
-  var oldStep = auth.raw.last_thesis_step, newStep = null;
-  if(part === "thesis"){
-    newStep = String(parseInt(oldStep || "0", 10) + 1);
-    auth.raw.last_thesis_step = newStep;
-  }
   auth.state = derive(auth.raw, cur && cur.date);
   render(cur);
-  var rows = [[k, "yes"]];
-  if(newStep != null) rows.push(["last_thesis_step", newStep]);
-  return appendRows(rows).then(function(){ return syncFromSheet(); }).then(function(){ return true; })
+  return appendRows([[k, "yes"]]).then(function(){ return syncFromSheet(); }).then(function(){ return true; })
     .catch(function(e){
       delete auth.raw[k];
-      if(newStep != null){ if(oldStep == null) delete auth.raw.last_thesis_step; else auth.raw.last_thesis_step = oldStep; }
       auth.state = derive(auth.raw, cur && cur.date); auth.err = true; render(cur); return false;
     });
 }
 
 /* in-app PENALTY: parts come from the public scaffold (penalty_date, penalty_parts) or the default
-   Lv1-3 set; each part taps to a private append-only row pen:DATE:part=yes; a thesis carry-over is
-   satisfied by any THESIS completion on or after the penalty date. When all parts are done the app
-   records pen:DATE:complete=yes; the System clears the public flag at its next review. */
-/* THESIS blocked while the originals for the current step are missing: no completion, no pressure */
-function thesisBlocked(){
-  if(!auth.ready || !auth.raw || !cur || !cur.date) return false;
-  var missing = [];
-  try { missing = JSON.parse(auth.raw["thesis:materials:missing"] || "[]"); } catch(e){}
-  return missing.length > 0 && !yes(auth.raw[dayKey(cur.date, "thesis")]);
-}
-
+   Lv1-3 set; each part taps to a private append-only row pen:DATE:part=yes. When all parts are done
+   the app records pen:DATE:complete=yes; the System clears the public flag at its next review. */
 function penaltyInfo(){
   if(!cur || !yes(cur.penalty_pending)) return null;
   var pd = cur.penalty_date || cur.date;
@@ -1043,22 +1009,13 @@ function penaltyInfo(){
   var lvl = auth.ready && auth.state ? parseInt(auth.state.level || "1", 10) : 1;
   var big = lvl > 3;
   var labels = {squats: big ? "50 extra squats" : "30 extra squats",
-                "wall-sit": big ? "5 minutes of wall-sit (total)" : "2 minutes of wall-sit (total)",
-                thesis: "Finish the carried-over thesis step"};
+                "wall-sit": big ? "5 minutes of wall-sit (total)" : "2 minutes of wall-sit (total)"};
   var parts = String(cur.penalty_parts || "squats,wall-sit").split(",").map(function(x){ return x.trim(); }).filter(Boolean);
   return {date: pd, parts: parts, labels: labels};
 }
 function penKey(pd, p){ return "pen:" + pd + ":" + p; }
 function penPartDone(pd, p){
   if(!auth.raw) return false;
-  if(p === "thesis"){
-    var done = false;
-    Object.keys(auth.raw).forEach(function(k){
-      var m = k.match(/^day:(\d{4}-\d{2}-\d{2}):thesis$/);
-      if(m && m[1] >= pd && yes(auth.raw[k])) done = true;
-    });
-    return done;
-  }
   return yes(auth.raw[penKey(pd, p)]);
 }
 function renderPenalty(){
@@ -1077,9 +1034,9 @@ function renderPenalty(){
     if(d) done++;
     var b = document.createElement("button");
     b.type = "button";
-    b.className = "penrow" + (d ? " done" : "") + (p === "thesis" ? " info" : "");
-    b.innerHTML = "<span class='pbox'></span><span>" + (info.labels[p] || p) + (p === "thesis" ? " - completed through the THESIS quest" : "") + "</span>";
-    if(p !== "thesis" && !d){
+    b.className = "penrow" + (d ? " done" : "");
+    b.innerHTML = "<span class='pbox'></span><span>" + (info.labels[p] || p) + "</span>";
+    if(!d){
       b.addEventListener("click", function(){
         var k = penKey(info.date, p);
         auth.raw[k] = "yes";
@@ -1277,26 +1234,42 @@ function showLevelUp(note){
 }
 
 /* quest tap with private sync: tap = the confirmation (honor system) */
-[["q-body","body"],["q-mind","mind"],["q-thesis","thesis"]].forEach(function(p){
+[["q-body","body"],["q-mind","mind"],["q-french","french"]].forEach(function(p){
   document.getElementById(p[0]).addEventListener("click", function(e){
     if(!auth.ready || !cur || !cur.date) return;
     if(cur.event === "rest") return; // excused rest day: no quest completions
     var tf = todayFlags();
-    if(tf[p[1]]) return; // already complete: first listener toggled expansion
+    if(tf[p[1]]) return; // already complete: first listener opens the model/expansion
     e.stopPropagation();
     if(!dayOpen()){ showClosed(); return; }
-    if(p[1] === "thesis" && thesisBlocked()){
-      openModal("[ THESIS BLOCKED ]", "<span class='dim'>The originals for this step are missing - the System does not hold them. Open MATERIALS for what to restore. This part does not count against you while they are gone.</span>");
-      return;
-    }
     if(p[1] === "mind"){ openMindFlow(); return; } // flashcard study/recall flow
     var beforeLvl = parseInt(auth.state.level, 10);
     var r = getReported(cur.date); r[p[1]] = true; setReported(r);
     completeQuest(p[1]).then(function(changed){
-      if(changed && parseInt(auth.state.level,10) > beforeLvl) showLevelUp(p[1].toUpperCase() + " complete. +" + (p[1]==="thesis"?"40":"30") + " XP.");
+      if(!changed) return;
+      if(parseInt(auth.state.level,10) > beforeLvl){ showLevelUp(p[1].toUpperCase() + " complete. +" + (p[1]==="french"?"40":"30") + " XP."); return; }
+      if(p[1] === "french") openFrenchModel();
     });
   }, true);
 });
+
+/* FRENCH model answer: private sheet, revealed only after self-reported completion - no grading claims */
+function openFrenchModel(){
+  var b = document.getElementById("mBody");
+  openModal("[ FRENCH - MODEL ANSWER ]", "");
+  var model = (auth.raw && cur && cur.date) ? (auth.raw["french:" + cur.date + ":model"] || "") : "";
+  if(model){
+    var div = document.createElement("div");
+    div.style.margin = "6px 0"; div.style.fontStyle = "italic";
+    div.textContent = "\u00AB " + model + " \u00BB";
+    b.appendChild(div);
+    var note = document.createElement("span"); note.className = "dim";
+    note.textContent = "Compare it with your answer. The System does not grade your French - the model teaches.";
+    b.appendChild(note);
+  } else {
+    b.textContent = "Today's model answer is not synced yet.";
+  }
+}
 
 /* in-app MIND: 10 flashcards from his private deck; study before 21:30 (hidden after),
    exact recall (FR+AR) with per-language retries from 21:30; MIND only when all 10 mastered */
