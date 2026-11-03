@@ -496,13 +496,20 @@ function renderTimer(){
   var ms = (endSec - nowSec)*1000;
   var h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
   setText("ttime", h + "H " + (m<10?"0":"") + m + "M");
+  var ef = effFlags();
   var left = [];
-  if(!yes(cur.body_done)) left.push("BODY");
-  if(!yes(cur.mind_done)) left.push("MIND");
-  if(!yes(cur.french_done)) left.push("FRENCH");
+  if(!ef.body) left.push("BODY");
+  if(!ef.mind) left.push("MIND");
+  if(!ef.french) left.push("FRENCH");
   setText("trem", left.length === 0 ? "ALL PARTS COMPLETE" : ("REMAINING: " + left.join(" - ")));
 }
 
+/* completion indicators follow the private day ledger when signed in (XP already does);
+   the public scaffold flags remain the signed-out view and the System's historical record */
+function effFlags(){
+  if(auth.ready && auth.raw && cur && cur.date){ return todayFlags(); }
+  return {body: yes(cur && cur.body_done), mind: yes(cur && cur.mind_done), french: yes(cur && cur.french_done)};
+}
 function statWidth(v){
   var n = parseInt(v||"0",10);
   return Math.min(100, Math.round(n/30*100)) + "%";
@@ -530,6 +537,7 @@ function render(s){
   setText("qd-french", s.quest_french || "-");
 
   var rep = getReported(s.date || "");
+  var eff = effFlags();
   [["q-body","qs-body", s.body_done, rep.body, "+30 XP - STR +1"],
    ["q-mind","qs-mind", s.mind_done, rep.mind, "+30 XP - MEM +1"],
    ["q-french","qs-french", s.french_done, rep.french, "+40 XP - INT +1"]].forEach(function(p){
@@ -538,7 +546,7 @@ function render(s){
     el.classList.remove("done","reported");
     if(s.event === "rest"){ qs.textContent = "[REST DAY]"; return; }
     qs.style.color = "";
-    if(yes(p[2])){
+    if(eff[p[0].slice(2)]){
       el.classList.add("done");
       qs.textContent = "[COMPLETE] " + p[4] + " - TAP FOR DETAILS";
     } else {
