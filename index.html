@@ -639,7 +639,7 @@ document.getElementById("rulesbtn").addEventListener("click", function(){
     "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, FRENCH. At 21:30 the System checks what remains." +
     "<div class='rh'>BODY - STR</div>Daily training, no equipment: push-ups, squats, sit-ups, plank. Current targets: 5 push-ups (knees allowed), 10 squats, 5 sit-ups, 20-second plank. Targets stay fixed - they rise gradually only when they feel comfortable with good form, never automatically with level-ups. Never push through pain." +
     "<div class='rh'>MIND - MEM</div>Memory training rotates daily: numbers, words in order, interpreting flashcards, quotes. The day's item waits in the app - tap MIND to study. Study stays open until you mark it studied; the recall test runs from 21:30, blind and exact. Only exact recall earns MEM." +
-    "<div class='rh'>FRENCH - INT</div>One short practical French challenge per day: real phrases for work, admin and everyday life. Write it or say it out loud, then tap when done - the System's model answer appears after, inside the app. Self-reported like BODY: the System does not grade your French, the model teaches. THESIS was retired from GATE on 2026-11-03 at your request; its XP and INT stay earned." +
+    "<div class='rh'>FRENCH - INT</div>One practical challenge per day plus a study pack: vocabulary and phrases in French and English, formal and informal, with usage notes. Tap FRENCH to open today's pack; when you have written or said your answer, mark it done - the System's model answer appears after, inside the app. Self-reported like BODY: the System does not grade your languages, the model teaches. THESIS was retired from GATE on 2026-11-03 at your request; its XP and INT stay earned." +
     "<div class='rh'>REWARDS</div>BODY +30 XP, STR +1. MIND +30 XP, MEM +1 on exact recall only. FRENCH +40 XP, INT +1. All three in one day: +20 bonus XP, streak +1." +
     "<div class='rh'>LEVELS</div>XP fills the bar; when it is full, you level up and surplus XP carries over. The next level costs 100 + 20 x current level XP: 120, then 140, then 160. Workout targets stay fixed at every level; they rise only when the current ones feel comfortable with good form." +
     "<div class='rh'>STATS</div>STR counts completed BODY quests. MEM counts passed memory tests. INT counts completed knowledge work: FRENCH challenges now, THESIS steps before. Records of wins, started at zero." +
@@ -1259,6 +1259,7 @@ function showLevelUp(note){
     e.stopPropagation();
     if(!dayOpen()){ showClosed(); return; }
     if(p[1] === "mind"){ openMindFlow(); return; } // flashcard study/recall flow
+    if(p[1] === "french"){ openFrenchFlow(); return; } // study pack first, self-report inside
     var beforeLvl = parseInt(auth.state.level, 10);
     var r = getReported(cur.date); r[p[1]] = true; setReported(r);
     completeQuest(p[1]).then(function(changed){
@@ -1268,6 +1269,49 @@ function showLevelUp(note){
     });
   }, true);
 });
+
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+/* FRENCH daily study pack: bilingual vocab/phrases/info from the private sheet, then self-report inside */
+function openFrenchFlow(){
+  var d = cur.date;
+  var pack = null;
+  try{ pack = JSON.parse(auth.raw["french:" + d + ":pack"] || "null"); }catch(e){}
+  var html = "";
+  if(pack && pack.theme){ html += "<span class='rh'>THEME</span><div>" + esc(pack.theme) + "</div>"; }
+  html += "<span class='rh'>TODAY'S CHALLENGE</span><div>" + esc(cur.quest_french || "-") + "</div>";
+  if(pack){
+    if(pack.vocab && pack.vocab.length){
+      html += "<span class='rh'>VOCABULARY - FRANCAIS / ENGLISH</span>";
+      pack.vocab.forEach(function(v){
+        html += "<div style='margin:3px 0'><b>" + esc(v.fr) + "</b> - " + esc(v.en) + (v.note ? " <span class='dim' style='display:inline;margin:0'>" + esc(v.note) + "</span>" : "") + "</div>";
+      });
+    }
+    if(pack.phrases && pack.phrases.length){
+      html += "<span class='rh'>PHRASES - FORMAL / INFORMAL</span>";
+      pack.phrases.forEach(function(p){
+        html += "<div style='margin:6px 0'><span class='dim' style='display:inline;margin:0;color:var(--cy)'>[" + esc(p.reg) + "]</span> " + esc(p.text) + (p.gloss ? "<span class='dim' style='margin-top:2px'>" + esc(p.gloss) + "</span>" : "") + "</div>";
+      });
+    }
+    if(pack.info){ html += "<span class='rh'>GOOD TO KNOW</span><div>" + esc(pack.info) + "</div>"; }
+  } else {
+    html += "<span class='dim'>Today's study pack is not synced yet.</span>";
+  }
+  openModal("[ FRENCH - DAILY PACK ]", html);
+  var b = document.createElement("button");
+  b.className = "mclose"; b.style.width = "100%"; b.style.margin = "16px 0 0";
+  b.textContent = "MARK DONE - REVEAL MODEL ANSWER";
+  b.addEventListener("click", function(){
+    var beforeLvl = parseInt(auth.state.level, 10);
+    var r = getReported(cur.date); r.french = true; setReported(r);
+    completeQuest("french").then(function(changed){
+      if(!changed) return;
+      if(parseInt(auth.state.level,10) > beforeLvl){ showLevelUp("FRENCH complete. +40 XP."); return; }
+      openFrenchModel();
+    });
+  });
+  document.getElementById("mBody").appendChild(b);
+}
 
 /* FRENCH model answer: private sheet, revealed only after self-reported completion - no grading claims */
 function openFrenchModel(){
