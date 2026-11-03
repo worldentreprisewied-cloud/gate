@@ -1236,7 +1236,14 @@ function showLevelUp(note){
 /* quest tap with private sync: tap = the confirmation (honor system) */
 [["q-body","body"],["q-mind","mind"],["q-french","french"]].forEach(function(p){
   document.getElementById(p[0]).addEventListener("click", function(e){
-    if(!auth.ready || !cur || !cur.date) return;
+    if(!cur || !cur.date) return;
+    if(!auth.ready){ /* signed-out tap: prompt sign-in instead of a silent no-op */
+      e.stopPropagation();
+      openModal("[ SIGN IN REQUIRED ]", "Quest completions record against your private sync. Sign in, then tap the part again when the System shows SYNCED.");
+      var ab = document.getElementById("authbtn");
+      if(ab && !auth.pending){ ab.click(); }
+      return;
+    }
     if(cur.event === "rest") return; // excused rest day: no quest completions
     var tf = todayFlags();
     if(tf[p[1]]) return; // already complete: first listener opens the model/expansion
