@@ -373,7 +373,7 @@ body{
         <div class="qin">
           <div class="qbox"><i></i></div>
           <div class="qt">
-            <div class="qn">FRENCH</div>
+            <div class="qn">FR &amp; EN</div>
             <div class="qd" id="qd-french">-</div>
             <div class="qs" id="qs-french">+40 XP - INT +1</div>
           </div>
@@ -423,7 +423,7 @@ var RANKS = [
 var STAT_INFO = {
   str: {h:"[ STR - STRENGTH ]", b:"The body. Grows with each completed BODY quest: push-ups, squats, sit-ups, plank.<span class='dim'>+1 STR per completed BODY quest. Knee push-ups allowed.</span>"},
   mem: {h:"[ MEM - MEMORY ]", b:"The mind. Grows with each completed MIND quest. A new memory task every day; recall is tested at 21:30.<span class='dim'>+1 MEM only on exact recall at the evening test.</span>"},
-  int: {h:"[ INT - INTELLIGENCE ]", b:"Knowledge work. Grows with each completed FRENCH challenge - and kept every INT earned from THESIS steps before THESIS was retired on 2026-11-03.<span class='dim'>+1 INT per completed FRENCH challenge.</span>"}
+  int: {h:"[ INT - INTELLIGENCE ]", b:"Knowledge work. Grows with each completed FR & EN challenge - and kept every INT earned from THESIS steps before THESIS was retired on 2026-11-03.<span class='dim'>+1 INT per completed FR & EN challenge.</span>"}
 };
 
 var cur = {date:"", level:"1"};
@@ -500,7 +500,7 @@ function renderTimer(){
   var left = [];
   if(!ef.body) left.push("BODY");
   if(!ef.mind) left.push("MIND");
-  if(!ef.french) left.push("FRENCH");
+  if(!ef.french) left.push("FR & EN");
   setText("trem", left.length === 0 ? "ALL PARTS COMPLETE" : ("REMAINING: " + left.join(" - ")));
 }
 
@@ -636,13 +636,13 @@ document.getElementById("rankbtn").addEventListener("click", function(){
 });
 document.getElementById("rulesbtn").addEventListener("click", function(){
   openModal("[ SYSTEM GUIDE ]",
-    "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, FRENCH. At 21:30 the System checks what remains." +
+    "<div class='rh'>DAILY QUEST</div>Arrives 06:00. Deadline 23:59. Three parts: BODY, MIND, FR & EN. At 21:30 the System checks what remains." +
     "<div class='rh'>BODY - STR</div>Daily training, no equipment: push-ups, squats, sit-ups, plank. Current targets: 5 push-ups (knees allowed), 10 squats, 5 sit-ups, 20-second plank. Targets stay fixed - they rise gradually only when they feel comfortable with good form, never automatically with level-ups. Never push through pain." +
     "<div class='rh'>MIND - MEM</div>Memory training rotates daily: numbers, words in order, interpreting flashcards, quotes. The day's item waits in the app - tap MIND to study. Study stays open until you mark it studied; the recall test runs from 21:30, blind and exact. Only exact recall earns MEM." +
-    "<div class='rh'>FRENCH - INT</div>One practical challenge per day plus a study pack: vocabulary and phrases in French and English, formal and informal, with usage notes. Tap FRENCH to open today's pack; when you have written or said your answer, mark it done - the System's model answer appears after, inside the app. Self-reported like BODY: the System does not grade your languages, the model teaches. THESIS was retired from GATE on 2026-11-03 at your request; its XP and INT stay earned." +
-    "<div class='rh'>REWARDS</div>BODY +30 XP, STR +1. MIND +30 XP, MEM +1 on exact recall only. FRENCH +40 XP, INT +1. All three in one day: +20 bonus XP, streak +1." +
+    "<div class='rh'>FRENCH & ENGLISH - INT</div>One practical challenge per day plus a study pack: vocabulary and phrases in French and English, formal and informal, with usage notes. Tap FR & EN to open today's pack; when you have written or said your answer, mark it done - the System's model answer appears after, inside the app. Self-reported like BODY: the System does not grade your languages, the model teaches. THESIS was retired from GATE on 2026-11-03 at your request; its XP and INT stay earned." +
+    "<div class='rh'>REWARDS</div>BODY +30 XP, STR +1. MIND +30 XP, MEM +1 on exact recall only. FR & EN +40 XP, INT +1. All three in one day: +20 bonus XP, streak +1." +
     "<div class='rh'>LEVELS</div>XP fills the bar; when it is full, you level up and surplus XP carries over. The next level costs 100 + 20 x current level XP: 120, then 140, then 160. Workout targets stay fixed at every level; they rise only when the current ones feel comfortable with good form." +
-    "<div class='rh'>STATS</div>STR counts completed BODY quests. MEM counts passed memory tests. INT counts completed knowledge work: FRENCH challenges now, THESIS steps before. Records of wins, started at zero." +
+    "<div class='rh'>STATS</div>STR counts completed BODY quests. MEM counts passed memory tests. INT counts completed knowledge work: FR & EN challenges now, THESIS steps before. Records of wins, started at zero." +
     "<div class='rh'>RANKS</div>E at Levels 1-9, D 10-19, C 20-34, B 35-49, A 50-69, S 70+. Tap the emblem for the full path and titles." +
     "<div class='rh'>STREAK</div>Consecutive days with all three parts complete. BEST keeps the longest run." +
     "<div class='rh'>NIGHT CHECK</div>At 21:30 the memory recall test opens in the app, and the System checks what remains unfinished." +
@@ -1297,7 +1297,7 @@ function openFrenchFlow(){
   } else {
     html += "<span class='dim'>Today's study pack is not synced yet.</span>";
   }
-  openModal("[ FRENCH - DAILY PACK ]", html);
+  openModal("[ FRENCH & ENGLISH - DAILY PACK ]", html);
   var b = document.createElement("button");
   b.className = "mclose"; b.style.width = "100%"; b.style.margin = "16px 0 0";
   b.textContent = "MARK DONE - REVEAL MODEL ANSWER";
@@ -1306,7 +1306,7 @@ function openFrenchFlow(){
     var r = getReported(cur.date); r.french = true; setReported(r);
     completeQuest("french").then(function(changed){
       if(!changed) return;
-      if(parseInt(auth.state.level,10) > beforeLvl){ showLevelUp("FRENCH complete. +40 XP."); return; }
+      if(parseInt(auth.state.level,10) > beforeLvl){ showLevelUp("FR & EN complete. +40 XP."); return; }
       openFrenchModel();
     });
   });
@@ -1316,7 +1316,7 @@ function openFrenchFlow(){
 /* FRENCH model answer: private sheet, revealed only after self-reported completion - no grading claims */
 function openFrenchModel(){
   var b = document.getElementById("mBody");
-  openModal("[ FRENCH - MODEL ANSWER ]", "");
+  openModal("[ FRENCH & ENGLISH - MODEL ANSWER ]", "");
   var model = (auth.raw && cur && cur.date) ? (auth.raw["french:" + cur.date + ":model"] || "") : "";
   if(model){
     var div = document.createElement("div");
