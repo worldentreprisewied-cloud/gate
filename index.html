@@ -592,6 +592,7 @@ function loadState(){
     if(!cur.date) return;
     var doneKey = p[1] + "_done";
     if(yes(cur[doneKey])){ if(p[1] === "french"){ openFrenchModel(); return; } this.classList.toggle("expanded"); return; }
+    if(p[1] === "french" && todayFlags().french){ openFrenchModel(); return; } /* private sync already recorded it - model stays available before the System review flips the public flag */
     var r = getReported(cur.date);
     r[p[1]] = !r[p[1]];
     setReported(r);
